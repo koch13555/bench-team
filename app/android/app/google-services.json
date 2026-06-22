@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "143080921845",
+    "firebase_url": "https://bench-team-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "bench-team-app",
+    "storage_bucket": "bench-team-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:143080921845:android:3e90768e519974b88883bc",
+        "android_client_info": {
+          "package_name": "com.example.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrlNM0ysnBBkjwNXcAxs_ZGVSU73y0TMo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
