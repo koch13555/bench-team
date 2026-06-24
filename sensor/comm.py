@@ -10,7 +10,7 @@ WIFI_SSID = "OIT-AirLAN.1x"
 WIFI_PASSWORD = "DSKsci79&$"
 
 # Firebase Realtime DatabaseのURL（末尾に「/変更したいパス.json」をつけます）
-FIREBASE_URL = "https://【あなたのプロジェクトID】.firebaseio.com/button_events.json"
+FIREBASE_URL = "https://bench-team-app.firebaseio.com/button_events.json"
 
 # ==========================================
 # 2. Wi-Fi接続処理
