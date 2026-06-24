@@ -271,51 +271,127 @@ class _FloorMapSkeleton extends StatelessWidget {
 ///  - 横スクロール / 縦スクロール（ドラッグでパン）
 ///  - ピンチイン・ピンチアウトでのズームイン・ズームアウト
 /// に対応している。
-class _FloorMapContent extends StatelessWidget {
+///
+/// 表示開始時は、フロアマップ全体（canvasWidth x canvasHeight）が
+/// 画面の表示エリアにちょうど収まるスケールを自動計算してセットする。
+/// これにより、
+///   - 一部分しか見えない（要素が画面外に出てしまう）
+///   - フロア切替直後に拡大された状態で一瞬表示される
+/// という問題を解消する。
+class _FloorMapContent extends StatefulWidget {
   final String floor;
   const _FloorMapContent({super.key, required this.floor});
 
   @override
-  Widget build(BuildContext context) {
-    final Widget mapWidget = switch (floor) {
-      '9F' => _buildFloor9F(),
-      _ => _buildFloor6F(),
+  State<_FloorMapContent> createState() => _FloorMapContentState();
+}
+
+class _FloorMapContentState extends State<_FloorMapContent> {
+  final TransformationController _controller = TransformationController();
+  bool _didInitialFit = false;
+  bool _isFitReady = false; // フィット計算が完了するまで非表示にするためのフラグ
+
+  /// フロアごとのキャンバスサイズ（_FloorMapCanvas の canvasWidth/canvasHeight と一致させる）
+  Size get _canvasSize => switch (widget.floor) {
+        '9F' => const Size(792, 720),
+        _ => const Size(747, 687),
+      };
+
+  Widget _buildMapWidget() {
+    return switch (widget.floor) {
+      '9F' => _FloorMapCanvas(
+          canvasWidth: _canvasSize.width,
+          canvasHeight: _canvasSize.height,
+          items: _floor9FItems,
+        ),
+      _ => _FloorMapCanvas(
+          canvasWidth: _canvasSize.width,
+          canvasHeight: _canvasSize.height,
+          items: _floor6FItems,
+        ),
     };
-
-    return InteractiveViewer(
-      // パン（ドラッグでの横・縦スクロール）を有効化
-      panEnabled: true,
-      // ピンチでのズームイン・ズームアウトを有効化
-      scaleEnabled: true,
-      minScale: 0.5,
-      maxScale: 4.0,
-      // マップ全体が画面に収まりすぎないよう少し余白を持たせる
-      boundaryMargin: const EdgeInsets.all(80),
-      child: mapWidget,
-    );
   }
 
-  /// ===== 6F のフロアマップ =====
-  /// 6Fimage.png から座標を実測して再現したレイアウト。
-  /// 元画像のキャンバスサイズは 747 x 687（_FloorMapCanvas で定義）。
-  /// 座席や設備を増減したい場合は _floor6FItems のリストを編集する。
-  Widget _buildFloor6F() {
-    return _FloorMapCanvas(
-      canvasWidth: 747,
-      canvasHeight: 687,
-      items: _floor6FItems,
-    );
+  /// 表示可能エリア(viewportSize)にフロアマップ全体(_canvasSize)が
+  /// ちょうど収まるスケールを計算し、中央寄せの変換行列をセットする。
+  void _fitToScreen(Size viewportSize) {
+    final canvas = _canvasSize;
+    if (viewportSize.width <= 0 || viewportSize.height <= 0) return;
+
+    // 横・縦それぞれの縮小率を計算し、小さい方（=全体が必ず収まる方）を採用
+    final scaleX = viewportSize.width / canvas.width;
+    final scaleY = viewportSize.height / canvas.height;
+    final scale = (scaleX < scaleY ? scaleX : scaleY) * 0.95; // 少し余白を持たせる
+
+    // スケール後のサイズが表示エリアの中央に来るような平行移動量を計算
+    final dx = (viewportSize.width - canvas.width * scale) / 2;
+    final dy = (viewportSize.height - canvas.height * scale) / 2;
+
+    final matrix = Matrix4.identity()
+      ..translate(dx, dy)
+      ..scale(scale);
+
+    _controller.value = matrix;
+
+    if (!_isFitReady) {
+      setState(() => _isFitReady = true);
+    }
   }
 
-  /// ===== 9F のフロアマップ =====
-  /// 9Fimage.png から座標を実測して再現したレイアウト。
-  /// 元画像のキャンバスサイズは 792 x 720（_FloorMapCanvas で定義）。
-  /// 座席や設備を増減したい場合は _floor9FItems のリストを編集する。
-  Widget _buildFloor9F() {
-    return _FloorMapCanvas(
-      canvasWidth: 792,
-      canvasHeight: 720,
-      items: _floor9FItems,
+  @override
+  void didUpdateWidget(_FloorMapContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // フロアが切り替わったら、次のフレームで再度フィットし直す
+    if (oldWidget.floor != widget.floor) {
+      _didInitialFit = false;
+      _isFitReady = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
+
+        // 初回表示時（またはフロア切替直後）に1度だけ全体フィットを適用する。
+        // build中に直接setStateやcontroller更新をすると例外になるため
+        // addPostFrameCallbackでフレーム確定後に実行する。
+        if (!_didInitialFit) {
+          _didInitialFit = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _fitToScreen(viewportSize);
+          });
+        }
+
+        return ClipRect(
+          // フィット計算が完了するまでは表示しない。
+          // これにより、スケール未調整の状態（左上の一部が拡大されたような見た目）
+          // が一瞬表示されてしまう問題を防ぐ。
+          child: AnimatedOpacity(
+            opacity: _isFitReady ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 150),
+            child: InteractiveViewer(
+              transformationController: _controller,
+              // パン（ドラッグでの横・縦スクロール）を有効化
+              panEnabled: true,
+              // ピンチでのズームイン・ズームアウトを有効化
+              scaleEnabled: true,
+              minScale: 0.3,
+              maxScale: 4.0,
+              // フィット計算後の行列をそのまま使うため、内側の余白は最小限にする
+              boundaryMargin: const EdgeInsets.all(200),
+              child: _buildMapWidget(),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -480,8 +556,10 @@ class _FloorMapCanvas extends StatelessWidget {
       child: Stack(
         children: [
           // 背景
+          // ※ ズームアウトした際にキャンバスの境界が「灰色の箱」として
+          //    浮いて見えてしまうため、ページ全体の背景と同じ白にしている
           Positioned.fill(
-            child: Container(color: AppColors.bgGray),
+            child: Container(color: Colors.white),
           ),
           // 各アイテム（座席・設備・ラベル）を座標通りに配置
           for (final item in items)
