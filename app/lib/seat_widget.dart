@@ -195,7 +195,10 @@ class _FloorMapPageState extends State<FloorMapPage> {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 400),
                 child: _isLoading
-                    ? _FloorMapSkeleton(key: const ValueKey('skeleton'))
+                    ? _FloorMapSkeleton(
+                        key: ValueKey('skeleton-$_currentFloor'),
+                        floor: _currentFloor,
+                      )
                     : _FloorMapContent(
                         key: ValueKey('content-$_currentFloor'),
                         floor: _currentFloor,
@@ -225,41 +228,50 @@ class _FloorMapPageState extends State<FloorMapPage> {
 }
 
 /// フロアマップのスケルトン（ローディング時の薄いプレースホルダー）
+/// 以前は6F/9Fどちらでも同じ汎用グリッドを表示していたため、
+/// 「見覚えのある違うフロアマップが一瞬見える」ように感じられる原因になっていた。
+/// 実際のフロア（_floor6FItems / _floor9FItems）のシルエットを
+/// 薄いグレーで表示することで、ローディング後にスムーズに実体へ繋がるようにする。
 class _FloorMapSkeleton extends StatelessWidget {
-  const _FloorMapSkeleton({super.key});
+  final String floor;
+  const _FloorMapSkeleton({super.key, required this.floor});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 1,
+    final items = floor == '9F' ? _floor9FItems : _floor6FItems;
+    final canvasSize = floor == '9F' ? const Size(792, 720) : const Size(747, 687);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
+        if (viewportSize.width <= 0 || viewportSize.height <= 0) {
+          return const SizedBox.expand();
+        }
+
+        // 実体表示時と同じロジックで全体フィットのスケールを計算する
+        final scaleX = viewportSize.width / canvasSize.width;
+        final scaleY = viewportSize.height / canvasSize.height;
+        final scale = (scaleX < scaleY ? scaleX : scaleY) * 0.95;
+
+        final dx = (viewportSize.width - canvasSize.width * scale) / 2;
+        final dy = (viewportSize.height - canvasSize.height * scale) / 2;
+
+        return Stack(
+          children: [
+            Positioned.fill(child: Container(color: Colors.white)),
+            for (final item in items)
+              Positioned(
+                left: dx + item.x * scale,
+                top: dy + item.y * scale,
+                width: item.width * scale,
+                height: item.height * scale,
+                child: Container(
+                  color: AppColors.gridGray.withOpacity(0.4),
+                ),
               ),
-              itemCount: 35,
-              itemBuilder: (_, i) => Container(
-                color: AppColors.gridGray.withOpacity(0.5),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Container(width: 80, height: 16, color: AppColors.skeletonGray),
-              const SizedBox(width: 12),
-              Container(width: 80, height: 16, color: AppColors.skeletonGray),
-            ],
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 }
@@ -288,8 +300,8 @@ class _FloorMapContent extends StatefulWidget {
 
 class _FloorMapContentState extends State<_FloorMapContent> {
   final TransformationController _controller = TransformationController();
-  bool _didInitialFit = false;
-  bool _isFitReady = false; // フィット計算が完了するまで非表示にするためのフラグ
+  bool _isFitReady = false; // フィット計算が完了するまで何も描画しないためのフラグ
+  Size? _lastFittedSize; // 直前にフィット計算を行ったビューポートサイズ
 
   /// フロアごとのキャンバスサイズ（_FloorMapCanvas の canvasWidth/canvasHeight と一致させる）
   Size get _canvasSize => switch (widget.floor) {
@@ -315,8 +327,10 @@ class _FloorMapContentState extends State<_FloorMapContent> {
   /// 表示可能エリア(viewportSize)にフロアマップ全体(_canvasSize)が
   /// ちょうど収まるスケールを計算し、中央寄せの変換行列をセットする。
   void _fitToScreen(Size viewportSize) {
-    final canvas = _canvasSize;
+    if (!mounted) return;
     if (viewportSize.width <= 0 || viewportSize.height <= 0) return;
+
+    final canvas = _canvasSize;
 
     // 横・縦それぞれの縮小率を計算し、小さい方（=全体が必ず収まる方）を採用
     final scaleX = viewportSize.width / canvas.width;
@@ -332,6 +346,7 @@ class _FloorMapContentState extends State<_FloorMapContent> {
       ..scale(scale);
 
     _controller.value = matrix;
+    _lastFittedSize = viewportSize;
 
     if (!_isFitReady) {
       setState(() => _isFitReady = true);
@@ -341,10 +356,12 @@ class _FloorMapContentState extends State<_FloorMapContent> {
   @override
   void didUpdateWidget(_FloorMapContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // フロアが切り替わったら、次のフレームで再度フィットし直す
+    // フロアが切り替わったら、フィット前の状態に戻して再計算する
     if (oldWidget.floor != widget.floor) {
-      _didInitialFit = false;
-      _isFitReady = false;
+      setState(() {
+        _isFitReady = false;
+        _lastFittedSize = null;
+      });
     }
   }
 
@@ -360,35 +377,46 @@ class _FloorMapContentState extends State<_FloorMapContent> {
       builder: (context, constraints) {
         final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
 
-        // 初回表示時（またはフロア切替直後）に1度だけ全体フィットを適用する。
+        // 初回表示時・フロア切替直後・画面サイズが変わった場合に
+        // 全体フィットを(再)計算する。
         // build中に直接setStateやcontroller更新をすると例外になるため
         // addPostFrameCallbackでフレーム確定後に実行する。
-        if (!_didInitialFit) {
-          _didInitialFit = true;
+        final needsFit = _lastFittedSize == null ||
+            (_lastFittedSize!.width - viewportSize.width).abs() > 0.5 ||
+            (_lastFittedSize!.height - viewportSize.height).abs() > 0.5;
+
+        if (needsFit) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _fitToScreen(viewportSize);
+            _fitToScreen(viewportSize);
           });
         }
 
+        // フィット計算が完了するまでは何も描画しない。
+        // InteractiveViewer自体をツリーに含めないことで、
+        // スケール未調整の状態（左上の一部が拡大されたような見た目、
+        // あるいは古いレイアウトの残像）が一瞬でも表示されることを防ぐ。
+        if (!_isFitReady) {
+          return const SizedBox.expand();
+        }
+
         return ClipRect(
-          // フィット計算が完了するまでは表示しない。
-          // これにより、スケール未調整の状態（左上の一部が拡大されたような見た目）
-          // が一瞬表示されてしまう問題を防ぐ。
-          child: AnimatedOpacity(
-            opacity: _isFitReady ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 150),
-            child: InteractiveViewer(
-              transformationController: _controller,
-              // パン（ドラッグでの横・縦スクロール）を有効化
-              panEnabled: true,
-              // ピンチでのズームイン・ズームアウトを有効化
-              scaleEnabled: true,
-              minScale: 0.3,
-              maxScale: 4.0,
-              // フィット計算後の行列をそのまま使うため、内側の余白は最小限にする
-              boundaryMargin: const EdgeInsets.all(200),
-              child: _buildMapWidget(),
+          child: InteractiveViewer(
+            transformationController: _controller,
+            // パン（ドラッグでの横・縦スクロール）を有効化
+            panEnabled: true,
+            // ピンチでのズームイン・ズームアウトを有効化
+            scaleEnabled: true,
+            minScale: 0.3,
+            maxScale: 4.0,
+            // フィット計算で設定した中央寄せの平行移動(dx, dy)が
+            // InteractiveViewer内部の境界判定でクランプされて
+            // 見切れてしまうことを防ぐため、キャンバス全体を
+            // 十分にカバーできる大きさの余白を確保する。
+            boundaryMargin: EdgeInsets.symmetric(
+              horizontal: _canvasSize.width,
+              vertical: _canvasSize.height,
             ),
+            child: _buildMapWidget(),
           ),
         );
       },
