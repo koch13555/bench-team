@@ -1,3 +1,7 @@
+##py -m mpremote connect COM5 fs cp comm.py :comm.py
+##py -m mpremote connect COM5 reset
+##py -m mpremote connect COM5 repl
+
 import network
 import time
 import urequests as requests  # HTTP通信用モジュール
@@ -6,8 +10,8 @@ from machine import Pin
 # ==========================================
 # 1. 各種設定（環境に合わせて書き換えてください）
 # ==========================================
-WIFI_SSID = "OIT-AirLAN.1x"
-WIFI_PASSWORD = "DSKsci79&$"
+WIFI_SSID = "h/sのiPhone"
+WIFI_PASSWORD = "mDj6-KA0r-Lhho-FO5a"
 
 # Firebase Realtime DatabaseのURL（末尾に「/変更したいパス.json」をつけます）
 FIREBASE_URL = "https://bench-team-app.firebaseio.com/button_events.json"
