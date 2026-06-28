@@ -1,26 +1,5 @@
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'フロア選択UI',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'NotoSansJP',
-        useMaterial3: true,
-      ),
-      home: const FloorSelectPage(),
-    );
-  }
-}
-
 /// ===== カラーパレット =====
 /// 元デザイン (すわほui-1.png) からピクセル抽出した値
 class AppColors {
