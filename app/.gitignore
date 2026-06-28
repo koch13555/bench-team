@@ -44,3 +44,4 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 app/lib/generated_plugin_registrant.dart
+app/lib/generated_plugin_registrant.dart
