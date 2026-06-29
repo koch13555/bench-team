@@ -24,10 +24,36 @@ class FloorSelectPage extends StatelessWidget {
       PageRouteBuilder(
         transitionDuration: Duration.zero, // 動画では遷移はカットのように見えるため瞬時に切り替え
         reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => FloorMapPage(floor: floor),
+        pageBuilder: (context, animation, __) => FloorMapPage(
+          floor: floor,
+          userProfile: mockUser,
+        ),
       ),
     );
   }
+  @override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: AppColors.bgGray,
+    body: Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('フロアを選択してください'),
+          ElevatedButton(
+            onPressed: () => _goToFloor(context, '6f'),
+            child: const Text('6F'),
+          ),
+          ElevatedButton(
+            onPressed: () => _goToFloor(context, '9f'),
+            child: const Text('9F'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+}
 // lib/models.dart
 
 class UserProfile {
@@ -275,33 +301,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.mainGreen,
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'フロアを選択してください',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 24),
-              _FloorButton(
-                label: '6F',
-                onTap: () => _goToFloor(context, '6F'),
-              ),
-              const SizedBox(height: 16),
-              _FloorButton(
-                label: '9F',
-                onTap: () => _goToFloor(context, '9F'),
-              ),
-            ],
-          ),
-        ),
-      ),
-      backgroundColor: Colors.blueGrey.shade50,
+
       appBar: AppBar(
         title: Row(
           children: [
@@ -388,15 +388,12 @@ class _MainScreenState extends State<MainScreen> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          FloorMapScreen(
-            floor: floors.firstWhere((f) => f.id == _activeFloorId, orElse: () => floors[0]),
-            seats: widget.seats[_activeFloorId] ?? [],
-            userProfile: widget.userProfile,
-            onUpdateSeat: widget.onUpdateSeat,
+          FloorMapPage(
+            floor: _activeFloorId,
+            userProfile: widget.userProfile
           ),
-          SettingsScreen(
-            profile: widget.userProfile,
-            onProfileChanged: widget.onUpdateProfile,
+          const Center(
+            child: Text('設定画面（準備中）'),
           ),
           Center(
             child: Column(
@@ -467,7 +464,13 @@ class _FloorButton extends StatelessWidget {
 /// =========================================================
 class FloorMapPage extends StatefulWidget {
   final String floor;
-  const FloorMapPage({super.key, required this.floor});
+  final UserProfile userProfile; 
+
+  const FloorMapPage({
+    super.key, 
+    required this.floor,
+    required this.userProfile,
+    });
 
   @override
   State<FloorMapPage> createState() => _FloorMapPageState();
@@ -476,46 +479,31 @@ class FloorMapPage extends StatefulWidget {
 class _FloorMapPageState extends State<FloorMapPage> {
   late String _currentFloor;
   bool _isLoading = true;
+  List<Seat> seats = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _currentFloor = widget.floor;
+    seats = generate6FSeats();
+    _startLoadingAnimation();
+  }
+
+  void _startLoadingAnimation() {
+    setState(() => _isLoading = true);
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    });
+  }
 // lib/screens/floor_map_screen.dart
 
-class FloorMapScreen extends StatelessWidget {
-  final Floor floor;
-  final List<Seat> seats;
-  final UserProfile userProfile;
-  final Function(String, String, bool) onUpdateSeat;
 
-  const FloorMapScreen({
-    super.key,
-    required this.floor,
-    required this.seats,
-    required this.userProfile,
-    required this.onUpdateSeat,
-  });
-
-  void _handleSelectSeat(BuildContext context, Seat seat) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => SeatDetailDialog(
-        seat: seat,
-        userProfile: userProfile,
-        onToggleSeat: () {
-          final setVacant = seat.status == 'occupied';
-          onUpdateSeat(floor.id, seat.id, setVacant);
-          Navigator.pop(context);
-        },
-        onForceVacate: () {
-          onUpdateSeat(floor.id, seat.id, true);
-          Navigator.pop(context);
-        },
-      ),
-    );
-  }
+  void _handleSelectSeat(BuildContext context, Seat seat) {}
 
   @override
   Widget build(BuildContext context) {
-    if (floor.id != '6f') {
+    if (widget.floor != '6f') {
       return const Center(child: Text('マップ準備中', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)));
     }
 
@@ -545,7 +533,7 @@ class FloorMapScreen extends StatelessWidget {
                   Row(children: [
                      const Icon(Icons.location_on, color: Colors.blue, size: 16),
                      const SizedBox(width: 4),
-                     Text(floor.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                     Text(widget.floor, style: const TextStyle(fontWeight: FontWeight.bold)),
                   ]),
                   const SizedBox(height: 4),
                   RichText(
@@ -721,7 +709,7 @@ class FloorMapScreen extends StatelessWidget {
     final now = DateTime.now().toUtc().add(const Duration(hours: 9));
     final isOutsideHours = now.hour < 9 || now.hour >= 20;
 
-    final isMine = seat.occupiedBy?.name == userProfile.name;
+    final isMine = seat.occupiedBy?.name == widget.userProfile.name;
     final effectiveStatus = isOutsideHours ? 'unavailable' : seat.status;
     final isOccupied = effectiveStatus == 'occupied';
     final isUnavailable = effectiveStatus == 'unavailable';
@@ -773,7 +761,7 @@ class FloorMapScreen extends StatelessWidget {
     final now = DateTime.now().toUtc().add(const Duration(hours: 9));
     final isOutsideHours = now.hour < 9 || now.hour >= 20;
 
-    final isMine = seat.occupiedBy?.name == userProfile.name;
+    final isMine = seat.occupiedBy?.name == widget.userProfile.name;
     final effectiveStatus = isOutsideHours ? 'unavailable' : seat.status;
     final isOccupied = effectiveStatus == 'occupied';
     final isUnavailable = effectiveStatus == 'unavailable';
@@ -993,26 +981,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _currentFloor = widget.floor;
-    _startLoadingAnimation();
-  }
-
-  /// フロアマップのスケルトン→実体のフェード切り替えを
-  /// ループ再生する（動画内で繰り返し見られたローディング表現）
-  void _startLoadingAnimation() {
-    setState(() => _isLoading = true);
-    Future.delayed(const Duration(milliseconds: 900), () {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-    });
-  }
-
-  void _changeFloor(String floor) {
-    setState(() {
-      _currentFloor = floor;
-    });
-    _startLoadingAnimation();
-    Navigator.of(context).pop(); // ドロワーを閉じる
     _nameController = TextEditingController(text: widget.profile.name);
     _deptController = TextEditingController(text: widget.profile.department);
     _untilController = TextEditingController(text: widget.profile.until);
@@ -1032,62 +1000,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      drawer: FloorDrawer(
-        currentFloor: _currentFloor,
-        onFloorSelected: _changeFloor,
+      appBar: AppBar(
+        title: const Text('プロフィール・設定',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
       ),
-      // ドロワーが開いたときに本体が右にスライド＆縮小してグレーがかる
-      // 動きを再現するため drawerScrimColor を使いつつ、Builder で
-      // 本体コンテンツに少し縮小エフェクトを掛ける
-      drawerScrimColor: Colors.black.withOpacity(0.08),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ヘッダー（ハンバーガーメニュー）
-            Container(
-              width: double.infinity,
-              height: 48,
-              color: AppColors.mainGreen,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Builder(
-                builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu, color: Colors.white),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
-                ),
-              ),
-            ),
-            // フロアマップ本体
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
-                child: _isLoading
-                    ? _FloorMapSkeleton(
-                        key: ValueKey('skeleton-$_currentFloor'),
-                        floor: _currentFloor,
-                      )
-                    : _FloorMapContent(
-                        key: ValueKey('content-$_currentFloor'),
-                        floor: _currentFloor,
-                      ),
-              ),
-            ),
-            // フッター（現在のフロア表示）
-            Container(
-              width: double.infinity,
-              height: 56,
-              color: AppColors.mainGreen,
-              alignment: Alignment.center,
-              child: Text(
-                _currentFloor,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-      appBar: AppBar(title: const Text('プロフィール・設定', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -1097,17 +1013,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 24),
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'お名前', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: 'お名前', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _deptController,
-              decoration: const InputDecoration(labelText: '所属・部署', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: '所属・部署', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _untilController,
-              decoration: const InputDecoration(labelText: '利用予定時刻', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: '利用予定時刻', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
@@ -1117,7 +1036,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               onPressed: _saveProfile,
-              child: const Text('設定を保存する', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('設定を保存する',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
