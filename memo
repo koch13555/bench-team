@@ -1,0 +1,84 @@
+import network
+import time
+import urequests as requests  # HTTP通信用モジュール
+from machine import Pin
+# ==========================================
+# 1. 各種設定（環境に合わせて書き換えてください）
+# ==========================================
+WIFI_SSID = "h/siPhone"
+WIFI_PASSWORD = "mDj6-KA0r-Lhho-FO5a"
+# Firebase Realtime DatabaseのURL
+FIREBASE_URL = "https://bench-team-app.firebaseio.com/button_events.json"
+# ==========================================
+# 2. Wi-Fi接続処理
+# ==========================================
+def connect_wifi():
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    if not wlan.isconnected():
+        print("Wi-Fiに接続中...")
+        wlan.connect(WIFI_SSID, WIFI_PASSWORD)
+        # 接続できるまで待機（タイムアウトは15秒）
+        timeout = 15
+        while not wlan.isconnected() and timeout > 0:
+            time.sleep(1)
+            timeout -= 1
+    if wlan.isconnected():
+        print("Wi-Fi接続成功! IPアドレス:", wlan.ifconfig()[0])
+    else:
+        print("Wi-Fi接続失敗。設定を確認してください。")
+# 起動時にWi-Fiへ接続
+connect_wifi()
+# ==========================================
+# 3. メイン処理
+# ==========================================
+# GPIO4 を入力に設定（一般的な人感センサーは自動でHIGH/LOWを出力するためプルアップ不要）
+sensor = Pin(4, Pin.IN)
+# 状態管理用の変数
+last_state = 0           # 前回のセンサー状態（初期値は 0: 反応なし）
+last_detection_time = time.time()  # 最後にセンサーが反応した時間
+p10_sent = True          # すでに 'p10' を送信済みかどうかのフラグ（起動時は送信済み扱い）
+print("プログラムを開始します。人感センサーを監視中...")
+while True:
+    current_state = sensor.value()
+    current_time = time.time()
+    # 【条件1】センサーが新しく反応した瞬間（前回「0」で、今回「1」になった瞬間）
+    if current_state == 1 and last_state == 0:
+        print("モーション検知! - Firebaseへ 'p11' を送信中...")
+        payload = {
+            "status": "p11",
+            "device": "ESP32",
+            "unixtime": current_time
+        }
+        try:
+            response = requests.post(FIREBASE_URL, json=payload)
+            print("送信完了! ステータスコード:", response.status_code)
+            print("レスポンス:", response.text)
+            response.close()  # メモリリーク防止
+        except Exception as e:
+            print("Firebaseへの送信に失敗しました:", e)
+        p10_sent = False  # 新たに反応があったので、p10（未反応通知）の送信待ち状態にする
+ 
+    # センサーが反応している（1の）間は、常に最終検知時間を現在時刻に更新する
+    if current_state == 1:
+        last_detection_time = current_time
+    # 【条件2】センサーに反応がなく（0）、最後に反応してから2分（120秒）以上経ち、まだ 'p10' を送っていない場合
+    if current_state == 0 and (current_time - last_detection_time) >= 120 and not p10_sent:
+        print("2分以上センサーに反応がありません。 - Firebaseへ 'p10' を送信中...")
+        payload = {
+            "status": "p10",
+            "device": "ESP32",
+            "unixtime": current_time
+        }
+        try:
+            response = requests.post(FIREBASE_URL, json=payload)
+            print("送信完了! ステータスコード:", response.status_code)
+            print("レスポンス:", response.text)
+            response.close()  # メモリリーク防止
+        except Exception as e:
+            print("Firebaseへの送信に失敗しました:", e)
+        p10_sent = True  # 'p10' を送信したので、次の検知があるまで再送信を防ぐ
+ 
+    # 現在の状態を保存して、0.1秒待つ
+    last_state = current_state
+    time.sleep(0.1)
