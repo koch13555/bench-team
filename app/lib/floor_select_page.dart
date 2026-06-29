@@ -590,9 +590,12 @@ class _FloorMapPageState extends State<FloorMapPage> {
                            _buildColumnRegion(context, 'A 列', leftSeats, MainAxisAlignment.spaceBetween, width: 96),
                            
                            // B列 (中央グリッド)
-                           Padding(
-                             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                             child: Column(
+                           Flexible(
+                             child: SingleChildScrollView(
+                               scrollDirection: Axis.horizontal,
+                               child: Padding(
+                                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                 child: Column(
                                children: [
                                  const Text('B 列 (メインエリア)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
                                  const SizedBox(height: 8),
@@ -630,11 +633,13 @@ class _FloorMapPageState extends State<FloorMapPage> {
                                         }),
                                       ),
                                     )
-                                 )
+                                  )
                                ]
                              )
+                             
                            ),
-
+                         ),
+                       ),
                            // C列 (右側)
                            _buildColumnRegion(context, 'C 列', rightSeats, MainAxisAlignment.start, width: 96),
                         ]
