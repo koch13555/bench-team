@@ -167,7 +167,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   // グローバルな状態管理
-  Map<String, List<Seat>> _seats = loadInitialSeats();
+  final Map<String, List<Seat>> _seats = loadInitialSeats();
   UserProfile _userProfile = UserProfile(
     name: mockUser.name,
     department: mockUser.department,
@@ -748,8 +748,9 @@ class SeatDetailDialog extends StatelessWidget {
     final isMeeting = seat.type == 'meeting';
     
     String capacity = '情報なし';
-    if (isA) capacity = '6人';
-    else if (isB) capacity = '2人';
+    if (isA) {
+      capacity = '6人';
+    } else if (isB) capacity = '2人';
     else if (isMeeting) capacity = seat.name.contains('8名') ? '8人' : '10人';
 
     return Container(
