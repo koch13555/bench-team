@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart';
-import 'floor_select_page.dart';
-import 'receive_service.dart';
+import 'seat_widget.dart'; // floor_select_page.dartから変更
 
 // 座席データの初期化
 Future<void> initializeSeats() async {
