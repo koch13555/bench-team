@@ -159,6 +159,7 @@ class _FloorMapPageState extends State<FloorMapPage> {
   // フロアごとの座席状態を保持する（着席/退席で更新される）。
   // 6F のみ座席データを持つ。9F は座席機能なし（見た目のみ）。
   late Map<String, List<SeatInfo>> _seatsByFloor;
+  final _receiveService = ReceiveService();
 
   @override
   void initState() {
@@ -168,6 +169,19 @@ class _FloorMapPageState extends State<FloorMapPage> {
       '6F': _buildInitial6FSeats(),
     };
     _startLoadingAnimation();
+    _receiveService.getSeatStream().listen((firebaseSeats) {
+      setState(() {
+        final seats = _seatsByFloor['6F'];
+        if (seats == null) return;
+        firebaseSeats.forEach((key, value) {
+          final index = int.tryParse(key.replaceAll('seat_', '')) ?? -1;
+          if (index > 0 && index <= seats.length) {
+            seats[index - 1].isOccupied = value['occupied'] ?? false;
+          }
+        });
+      });
+    });
+
   }
 
   /// フロアマップのスケルトン→実体のフェード切り替えを
