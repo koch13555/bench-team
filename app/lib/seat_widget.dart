@@ -1,5 +1,36 @@
 import 'package:flutter/material.dart';
-import 'receive_service.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'firebase_options.dart'; // firebase設定ファイル
+
+void main() async {
+  // Flutterのバインディングを初期化（Firebase初期化前に必須）
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Firebaseの初期化
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'フロア選択UI',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        fontFamily: 'NotoSansJP',
+        useMaterial3: true,
+      ),
+      home: const FloorSelectPage(),
+    );
+  }
+}
 
 /// ===== カラーパレット =====
 /// 元デザイン (すわほui-1.png) からピクセル抽出した値
@@ -12,7 +43,8 @@ class AppColors {
   static const Color skeletonGray = Color(0xFFE0E0E0); // ローディング用バー
 
   // --- 座席の状態色 ---
-  static const Color seatVacant = Colors.white; // 空席
+  // --- 座席の状態色 ---
+  static const Color seatVacant = Colors.blue; // 空席（白から青に変更）
   static const Color seatVacantBorder = Color(0xFFBDBDBD);
   static const Color seatOccupied = Color(0xFFEF5350); // 使用中
   static const Color seatOccupiedBorder = Color(0xFFD32F2F);
@@ -159,7 +191,6 @@ class _FloorMapPageState extends State<FloorMapPage> {
   // フロアごとの座席状態を保持する（着席/退席で更新される）。
   // 6F のみ座席データを持つ。9F は座席機能なし（見た目のみ）。
   late Map<String, List<SeatInfo>> _seatsByFloor;
-  final _receiveService = ReceiveService();
 
   @override
   void initState() {
@@ -169,21 +200,78 @@ class _FloorMapPageState extends State<FloorMapPage> {
       '6F': _buildInitial6FSeats(),
     };
     _startLoadingAnimation();
-    _receiveService.getSeatStream().listen((firebaseSeats) {
-      setState(() {
-        final seats = _seatsByFloor['6F'];
-        if (seats == null) return;
-        firebaseSeats.forEach((key, value) {
-          final index = int.tryParse(key.replaceAll('seat_', '')) ?? -1;
-          if (index > 0 && index <= seats.length) {
-            seats[index - 1].isOccupied = value['occupied'] ?? false;
-          }
-        });
-      });
-    });
+  
 
+    _listenToFirebase();
   }
 
+  // --- ★追加: Firebaseの変更を監視する処理 ---
+  void _listenToFirebase() {
+    final database = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: 'https://bench-team-app-default-rtdb.asia-southeast1.firebasedatabase.app',
+    );
+    
+    // 1. terminal_inputs ノードの監視
+    database.ref('terminal_inputs').onChildAdded.listen((DatabaseEvent event) {
+      if (event.snapshot.value != null) {
+        final data = event.snapshot.value as Map<dynamic, dynamic>;
+        final inputKey = data['inputKey']?.toString().toLowerCase(); 
+        
+        if (inputKey != null) {
+          _updateChairStateFromInput(inputKey);
+        }
+      }
+    });
+
+    // 2. button_events ノードの監視
+    database.ref('button_events').onChildAdded.listen((DatabaseEvent event) {
+      if (event.snapshot.value != null) {
+        final data = event.snapshot.value as Map<dynamic, dynamic>;
+        final status = data['status']?.toString().toLowerCase(); 
+        
+        if (status != null) {
+          _updateChairStateFromInput(status);
+        }
+      }
+    });
+  }
+
+  // --- ★追加: コマンド文字列を解析して席の着席・離席を更新する処理 ---
+  // --- ★変更: コマンド文字列を解析して指定された席(A-1〜A-4)の着席・離席を更新する処理 ---
+  void _updateChairStateFromInput(String input) {
+    // 例: "p11" （p + 席番号 + 状態1or0）
+    if (input.length >= 3 && (input.startsWith('p') || input.startsWith('ｐ'))) {
+      // 2文字目を席番号、3文字目を状態として切り出す
+      String chairNumStr = input.substring(1, 2);
+      String stateStr = input.substring(2, 3);
+
+      int? chairNum = int.tryParse(chairNumStr);
+      
+      // 今回の要件に合わせて、対象を 1〜4 (A-1 〜 A-4) に限定する
+      if (chairNum != null && chairNum >= 1 && chairNum <= 48) {
+        // 席番号から配列のインデックスに変換
+        // chairNum が 1 のとき chairIndex は 0（デスクA-1）
+        // chairNum が 2 のとき chairIndex は 1（デスクA-2）...となる
+        int chairIndex = chairNum - 1;
+        
+        // 状態文字列が '1' なら着席(true)、'0' 等なら離席(false)
+        bool isOccupied = (stateStr == '1');
+
+        if (mounted) {
+          setState(() {
+            // 現在の6Fの座席リストを取得
+            final seats = _seatsByFloor['6F'];
+            
+            // 念のためインデックスが範囲外にならないようチェックしてから状態を更新
+            if (seats != null && chairIndex >= 0 && chairIndex < seats.length) {
+              seats[chairIndex].isOccupied = isOccupied;
+            }
+          });
+        }
+      }
+    }
+  }
   /// フロアマップのスケルトン→実体のフェード切り替えを
   /// ループ再生する（動画内で繰り返し見られたローディング表現）
   void _startLoadingAnimation() {
