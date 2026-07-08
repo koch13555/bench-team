@@ -205,70 +205,56 @@ class _FloorMapPageState extends State<FloorMapPage> {
     _listenToFirebase();
   }
 
-  // --- ★追加: Firebaseの変更を監視する処理 ---
+  // --- ★変更: Firebaseのseatsノードをリアルタイム監視する処理 ---
   void _listenToFirebase() {
     final database = FirebaseDatabase.instanceFor(
       app: Firebase.app(),
       databaseURL: 'https://bench-team-app-default-rtdb.asia-southeast1.firebasedatabase.app',
     );
     
-    // 1. terminal_inputs ノードの監視
-    database.ref('terminal_inputs').onChildAdded.listen((DatabaseEvent event) {
-      if (event.snapshot.value != null) {
-        final data = event.snapshot.value as Map<dynamic, dynamic>;
-        final inputKey = data['inputKey']?.toString().toLowerCase(); 
-        
-        if (inputKey != null) {
-          _updateChairStateFromInput(inputKey);
-        }
-      }
-    });
+    // seats ノード全体を監視対象にする
+    final seatsRef = database.ref('seats');
 
-    // 2. button_events ノードの監視
-    database.ref('button_events').onChildAdded.listen((DatabaseEvent event) {
-      if (event.snapshot.value != null) {
-        final data = event.snapshot.value as Map<dynamic, dynamic>;
-        final status = data['status']?.toString().toLowerCase(); 
-        
-        if (status != null) {
-          _updateChairStateFromInput(status);
-        }
-      }
-    });
+    // データが最初に読み込まれた時、または新しく追加された時
+    seatsRef.onChildAdded.listen(_handleSeatEvent);
+
+    // データ（occupied の true/false など）が更新された時
+    seatsRef.onChildChanged.listen(_handleSeatEvent);
   }
 
   // --- ★追加: コマンド文字列を解析して席の着席・離席を更新する処理 ---
   // --- ★変更: コマンド文字列を解析して指定された席(A-1〜A-4)の着席・離席を更新する処理 ---
-  void _updateChairStateFromInput(String input) {
-    // 例: "p11" （p + 席番号 + 状態1or0）
-    if (input.length >= 3 && (input.startsWith('p') || input.startsWith('ｐ'))) {
-      // 2文字目を席番号、3文字目を状態として切り出す
-      String chairNumStr = input.substring(1, 2);
-      String stateStr = input.substring(2, 3);
-
-      int? chairNum = int.tryParse(chairNumStr);
+  // --- ★追加: 受信した座席データを解析する処理 ---
+  void _handleSeatEvent(DatabaseEvent event) {
+    if (event.snapshot.value != null) {
+      final data = event.snapshot.value as Map<dynamic, dynamic>;
       
-      // 今回の要件に合わせて、対象を 1〜4 (A-1 〜 A-4) に限定する
-      if (chairNum != null && chairNum >= 1 && chairNum <= 48) {
-        // 席番号から配列のインデックスに変換
-        // chairNum が 1 のとき chairIndex は 0（デスクA-1）
-        // chairNum が 2 のとき chairIndex は 1（デスクA-2）...となる
-        int chairIndex = chairNum - 1;
-        
-        // 状態文字列が '1' なら着席(true)、'0' 等なら離席(false)
-        bool isOccupied = (stateStr == '1');
+      // 各 seat_XX 内から seat_number と occupied を取得
+      final seatNumber = int.tryParse(data['seat_number']?.toString() ?? '');
+      final occupied = data['occupied'] == true; 
 
-        if (mounted) {
-          setState(() {
-            // 現在の6Fの座席リストを取得
-            final seats = _seatsByFloor['6F'];
-            
-            // 念のためインデックスが範囲外にならないようチェックしてから状態を更新
-            if (seats != null && chairIndex >= 0 && chairIndex < seats.length) {
-              seats[chairIndex].isOccupied = isOccupied;
-            }
-          });
-        }
+      if (seatNumber != null) {
+        _updateDeskState(seatNumber, occupied);
+      }
+    }
+  }
+
+  // --- ★追加: seat_number に応じて指定デスク(A-1〜A-7)の状態を更新する処理 ---
+  void _updateDeskState(int seatNumber, bool isOccupied) {
+    // 現状は seat_number が 1 から 7 までのデスク (A-1 〜 A-7) を対象にする
+    if (seatNumber >= 1 && seatNumber <= 7) {
+      // 6Fの座席リスト（_buildInitial6FSeats）の0〜6番目がデスクA-1〜A-7に対応しているため、
+      // 席番号から 1 を引いたものをインデックスとする
+      int chairIndex = seatNumber - 1; 
+
+      if (mounted) {
+        setState(() {
+          final seats = _seatsByFloor['6F'];
+          
+          if (seats != null && chairIndex >= 0 && chairIndex < seats.length) {
+            seats[chairIndex].isOccupied = isOccupied;
+          }
+        });
       }
     }
   }
