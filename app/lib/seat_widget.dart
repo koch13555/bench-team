@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart'; // firebase設定ファイル
- 
+
 void main() async {
   // Flutterのバインディングを初期化（Firebase初期化前に必須）
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,13 +11,13 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
- 
+
   runApp(const MyApp());
 }
- 
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
- 
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -31,7 +31,7 @@ class MyApp extends StatelessWidget {
     );
   }
 }
- 
+
 /// ===== カラーパレット =====
 /// 元デザイン (すわほui-1.png) からピクセル抽出した値
 class AppColors {
@@ -41,7 +41,7 @@ class AppColors {
   static const Color gridGray = Color(0xFFD9D9D9); // フロアマップのグリッド（設備など）
   static const Color overlayGray = Color(0xFFEBEBEB); // ドロワー表示時のコンテンツオーバーレイ
   static const Color skeletonGray = Color(0xFFE0E0E0); // ローディング用バー
- 
+
   // --- 座席の状態色 ---
   // --- 座席の状態色 ---
   static const Color seatVacant = Colors.blue; // 空席（白から青に変更）
@@ -49,7 +49,7 @@ class AppColors {
   static const Color seatOccupied = Color(0xFFEF5350); // 使用中
   static const Color seatOccupiedBorder = Color(0xFFD32F2F);
 }
- 
+
 /// =========================================================
 /// 0. キャンパス選択画面（アプリを開いた時に最初に表示される画面）
 /// アップロードされたデザイン（code.html / Lumina Workspace）を再現。
@@ -60,14 +60,14 @@ class AppColors {
 /// - 下部ナビゲーションは「ホーム」「フレンド」「QRコード」を同じ大きさ・色で
 ///   横並びに表示する（元デザインではQRコードだけ右上に浮き出ていたため統一）。
 /// =========================================================
- 
+
 /// キャンパス1件分の情報
 class _CampusInfo {
   final String nameJa;
   final String nameEn;
   final bool isFavorite; // 星マーク表示（元デザインでは梅田キャンパスのみ）
   final bool isAvailable; // タップでフロア選択画面へ進めるか
- 
+
   const _CampusInfo({
     required this.nameJa,
     required this.nameEn,
@@ -75,7 +75,7 @@ class _CampusInfo {
     this.isAvailable = false,
   });
 }
- 
+
 /// 元デザイン（code.html）のカード順そのまま：梅田・枚方・大宮・岡山
 const List<_CampusInfo> _campusList = [
   _CampusInfo(
@@ -88,17 +88,17 @@ const List<_CampusInfo> _campusList = [
   _CampusInfo(nameJa: 'OIT 大宮キャンパス', nameEn: 'Omiya Campus'),
   _CampusInfo(nameJa: 'OIT 岡山キャンパス', nameEn: 'Okayama Campus'),
 ];
- 
+
 class CampusSelectPage extends StatefulWidget {
   const CampusSelectPage({super.key});
- 
+
   @override
   State<CampusSelectPage> createState() => _CampusSelectPageState();
 }
- 
+
 class _CampusSelectPageState extends State<CampusSelectPage> {
   int _navIndex = 0; // 0: ホーム, 1: フレンド, 2: QRコード
- 
+
   // --- ★変更: OIT梅田キャンパスタップ時にフロア選択画面へ遷移する処理 ---
   void _onCampusTap(_CampusInfo campus) {
     if (campus.isAvailable) {
@@ -111,7 +111,7 @@ class _CampusSelectPageState extends State<CampusSelectPage> {
       );
     }
   }
- 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -163,7 +163,7 @@ class _CampusSelectPageState extends State<CampusSelectPage> {
       ),
     );
   }
- 
+
   Widget _buildHeader() {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,7 +204,7 @@ class _CampusSelectPageState extends State<CampusSelectPage> {
       ],
     );
   }
- 
+
   Widget _pillButton(String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -219,7 +219,7 @@ class _CampusSelectPageState extends State<CampusSelectPage> {
       ),
     );
   }
- 
+
   Widget _buildSearchBar() {
     return Container(
       decoration: BoxDecoration(
@@ -237,7 +237,7 @@ class _CampusSelectPageState extends State<CampusSelectPage> {
       ),
     );
   }
- 
+
   /// ★キャンパス一覧を四角い枠（角丸の白い枠線）で囲み、
   /// 枠の高さを固定することで、枠内でのスワイプ操作でスクロールできるようにする。
   Widget _buildCampusListBox() {
@@ -264,7 +264,7 @@ class _CampusSelectPageState extends State<CampusSelectPage> {
       ),
     );
   }
- 
+
   Widget _buildOnlineStatus() {
     return Column(
       children: [
@@ -289,7 +289,7 @@ class _CampusSelectPageState extends State<CampusSelectPage> {
       ],
     );
   }
- 
+
   /// 下部ナビゲーション：ホーム・フレンド・QRコードを同じ大きさ・色で並べる。
   /// ★変更: 元デザインではQRコードのアイコンだけ丸背景つきで右上に
   /// はみ出して表示されていたが、ホーム・フレンドの真隣に、
@@ -327,14 +327,14 @@ class _CampusSelectPageState extends State<CampusSelectPage> {
     );
   }
 }
- 
+
 /// キャンパス1件分のカード表示
 class _CampusCard extends StatelessWidget {
   final _CampusInfo campus;
   final VoidCallback onTap;
- 
+
   const _CampusCard({required this.campus, required this.onTap});
- 
+
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -388,21 +388,21 @@ class _CampusCard extends StatelessWidget {
     );
   }
 }
- 
+
 /// 下部ナビゲーションの1項目（ホーム / フレンド / QRコード 共通の見た目）
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
- 
+
   const _NavItem({
     required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
   });
- 
+
   @override
   Widget build(BuildContext context) {
     final color = selected ? AppColors.mainGreen : Colors.grey;
@@ -426,27 +426,27 @@ class _NavItem extends StatelessWidget {
     );
   }
 }
- 
+
 /// 「システム正常稼働中」の横で点滅する緑の丸
 class _PulsingDot extends StatefulWidget {
   const _PulsingDot();
- 
+
   @override
   State<_PulsingDot> createState() => _PulsingDotState();
 }
- 
+
 class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
   )..repeat(reverse: true);
- 
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
- 
+
   @override
   Widget build(BuildContext context) {
     return FadeTransition(
@@ -459,7 +459,7 @@ class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderState
     );
   }
 }
- 
+
 /// 背景の水玉ドット柄を描画する（元デザインの bg-grid-dots を再現）
 class _DotGridPainter extends CustomPainter {
   @override
@@ -472,24 +472,24 @@ class _DotGridPainter extends CustomPainter {
       }
     }
   }
- 
+
   @override
   bool shouldRepaint(covariant _DotGridPainter oldDelegate) => false;
 }
- 
+
 /// =========================================================
 /// 座席・設備の状態管理（モデル）
 /// memo.dart から人名・部署名などの個人情報を除いた、
 /// 座席そのものの情報（コンセント有無などのアメニティ・着席状態）のみを保持する。
 /// =========================================================
- 
+
 /// フロアマップ上の1要素（座席・設備など）の種別
 enum FloorItemType {
   seat, // タップして着席/退席できる座席
   facility, // 受付・棚・パーティションなどタップ不可の設備
   label, // 「入口」などのテキストラベル
 }
- 
+
 /// 座席そのものの情報（着席状態・アメニティ）
 /// 人名・部署名などの個人情報は持たない。
 class SeatInfo {
@@ -497,17 +497,17 @@ class SeatInfo {
   final List<String> amenities; // 例: ['電源', '窓際']
   final int capacity; // 座れる人数
   bool isOccupied; // 現在誰かが使用中かどうか（個人を特定しない単純な真偽値）
- 
+
   SeatInfo({
     required this.name,
     required this.amenities,
     this.capacity = 1,
     this.isOccupied = false,
   });
- 
+
   bool get hasPower => amenities.contains('電源');
 }
- 
+
 /// =========================================================
 /// 1. 最初のフロア選択画面
 /// 「フロアを選択してください」 + 6F / 9F ボタン
@@ -515,7 +515,7 @@ class SeatInfo {
 /// =========================================================
 class FloorSelectPage extends StatelessWidget {
   const FloorSelectPage({super.key});
- 
+
   void _goToFloor(BuildContext context, String floor) {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -525,7 +525,7 @@ class FloorSelectPage extends StatelessWidget {
       ),
     );
   }
- 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -559,13 +559,13 @@ class FloorSelectPage extends StatelessWidget {
     );
   }
 }
- 
+
 class _FloorButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
- 
+
   const _FloorButton({required this.label, required this.onTap});
- 
+
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -591,7 +591,7 @@ class _FloorButton extends StatelessWidget {
     );
   }
 }
- 
+
 /// =========================================================
 /// 2. フロアマップ画面（6F / 9F 共通）
 /// 上部: ハンバーガーメニュー
@@ -606,19 +606,19 @@ class _FloorButton extends StatelessWidget {
 class FloorMapPage extends StatefulWidget {
   final String floor;
   const FloorMapPage({super.key, required this.floor});
- 
+
   @override
   State<FloorMapPage> createState() => _FloorMapPageState();
 }
- 
+
 class _FloorMapPageState extends State<FloorMapPage> {
   late String _currentFloor;
   bool _isLoading = true;
- 
+
   // フロアごとの座席状態を保持する（着席/退席で更新される）。
   // 6F のみ座席データを持つ。9F は座席機能なし（見た目のみ）。
   late Map<String, List<SeatInfo>> _seatsByFloor;
- 
+
   @override
   void initState() {
     super.initState();
@@ -628,10 +628,10 @@ class _FloorMapPageState extends State<FloorMapPage> {
     };
     _startLoadingAnimation();
   
- 
+
     _listenToFirebase();
   }
- 
+
   // --- ★変更: Firebaseのseatsノードをリアルタイム監視する処理 ---
   void _listenToFirebase() {
     final database = FirebaseDatabase.instanceFor(
@@ -641,14 +641,14 @@ class _FloorMapPageState extends State<FloorMapPage> {
     
     // seats ノード全体を監視対象にする
     final seatsRef = database.ref('seats');
- 
+
     // データが最初に読み込まれた時、または新しく追加された時
     seatsRef.onChildAdded.listen(_handleSeatEvent);
- 
+
     // データ（occupied の true/false など）が更新された時
     seatsRef.onChildChanged.listen(_handleSeatEvent);
   }
- 
+
   // --- ★追加: コマンド文字列を解析して席の着席・離席を更新する処理 ---
   // --- ★変更: コマンド文字列を解析して指定された席(A-1〜A-4)の着席・離席を更新する処理 ---
   // --- ★追加: 受信した座席データを解析する処理 ---
@@ -659,13 +659,13 @@ class _FloorMapPageState extends State<FloorMapPage> {
       // 各 seat_XX 内から seat_number と occupied を取得
       final seatNumber = int.tryParse(data['seat_number']?.toString() ?? '');
       final occupied = data['occupied'] == true; 
- 
+
       if (seatNumber != null) {
         _updateDeskState(seatNumber, occupied);
       }
     }
   }
- 
+
   // --- ★追加: seat_number に応じて指定デスク(A-1〜A-7)の状態を更新する処理 ---
   void _updateDeskState(int seatNumber, bool isOccupied) {
     // 現状は seat_number が 1 から 7 までのデスク (A-1 〜 A-7) を対象にする
@@ -673,7 +673,7 @@ class _FloorMapPageState extends State<FloorMapPage> {
       // 6Fの座席リスト（_buildInitial6FSeats）の0〜6番目がデスクA-1〜A-7に対応しているため、
       // 席番号から 1 を引いたものをインデックスとする
       int chairIndex = seatNumber - 1; 
- 
+
       if (mounted) {
         setState(() {
           final seats = _seatsByFloor['6F'];
@@ -694,7 +694,7 @@ class _FloorMapPageState extends State<FloorMapPage> {
       setState(() => _isLoading = false);
     });
   }
- 
+
   void _changeFloor(String floor) {
     setState(() {
       _currentFloor = floor;
@@ -702,14 +702,14 @@ class _FloorMapPageState extends State<FloorMapPage> {
     _startLoadingAnimation();
     Navigator.of(context).pop(); // ドロワーを閉じる
   }
- 
+
   /// 座席タップ時：ボトムシートで詳細を表示し、着席/退席を行う。
   void _handleSeatTap(FloorMapItem item) {
     final seats = _seatsByFloor[_currentFloor];
     if (seats == null) return;
     final seatIndex = item.seatIndex;
     if (seatIndex == null || seatIndex >= seats.length) return;
- 
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -732,11 +732,11 @@ class _FloorMapPageState extends State<FloorMapPage> {
       },
     );
   }
- 
+
   @override
   Widget build(BuildContext context) {
     final seats = _seatsByFloor[_currentFloor];
- 
+
     return Scaffold(
       backgroundColor: Colors.white,
       drawer: FloorDrawer(
@@ -802,12 +802,12 @@ class _FloorMapPageState extends State<FloorMapPage> {
     );
   }
 }
- 
+
 /// 6F の座席データを初期生成する（個人情報なし・占有/空席の2状態のみ）。
 /// _floor6FItems の中で type が seat のアイテムの並び順と対応させる。
 List<SeatInfo> _buildInitial6FSeats() {
   final List<SeatInfo> seats = [];
- 
+
   // 左側の列（7席）
   for (int i = 1; i <= 7; i++) {
     seats.add(SeatInfo(
@@ -817,7 +817,7 @@ List<SeatInfo> _buildInitial6FSeats() {
       isOccupied: (i * 4 + 3) % 7 == 0 || (i * 4 + 4) % 9 == 0,
     ));
   }
- 
+
   // 中央グリッド（5行 x 7列 = 35席）
   for (int r = 1; r <= 5; r++) {
     for (int c = 1; c <= 7; c++) {
@@ -830,7 +830,7 @@ List<SeatInfo> _buildInitial6FSeats() {
       ));
     }
   }
- 
+
   // 右側の列（4席）
   for (int i = 1; i <= 4; i++) {
     seats.add(SeatInfo(
@@ -840,7 +840,7 @@ List<SeatInfo> _buildInitial6FSeats() {
       isOccupied: (i * 5 + 3) % 7 == 0 || (i * 5 + 4) % 9 == 0,
     ));
   }
- 
+
   // 下部の会議室（2室）
   seats.add(SeatInfo(
     name: '会議室 Meeting A',
@@ -854,37 +854,37 @@ List<SeatInfo> _buildInitial6FSeats() {
     capacity: 10,
     isOccupied: true,
   ));
- 
+
   return seats;
 }
- 
+
 /// フロアマップのスケルトン（ローディング時の薄いプレースホルダー）
 /// 実際のフロア（_floor6FItems / _floor9FItems）のシルエットを
 /// 薄いグレーで表示することで、ローディング後にスムーズに実体へ繋がるようにする。
 class _FloorMapSkeleton extends StatelessWidget {
   final String floor;
   const _FloorMapSkeleton({super.key, required this.floor});
- 
+
   @override
   Widget build(BuildContext context) {
     final items = floor == '9F' ? floor9FItems : floor6FItems;
     final canvasSize = floor == '9F' ? const Size(792, 720) : const Size(747, 687);
- 
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
         if (viewportSize.width <= 0 || viewportSize.height <= 0) {
           return const SizedBox.expand();
         }
- 
+
         // 実体表示時と同じロジックで全体フィットのスケールを計算する
         final scaleX = viewportSize.width / canvasSize.width;
         final scaleY = viewportSize.height / canvasSize.height;
         final scale = (scaleX < scaleY ? scaleX : scaleY) * 0.95;
- 
+
         final dx = (viewportSize.width - canvasSize.width * scale) / 2;
         final dy = (viewportSize.height - canvasSize.height * scale) / 2;
- 
+
         return Stack(
           children: [
             Positioned.fill(child: Container(color: Colors.white)),
@@ -904,7 +904,7 @@ class _FloorMapSkeleton extends StatelessWidget {
     );
   }
 }
- 
+
 /// フロアマップの実体（座席配置などのレイアウト表示）
 /// floor の値（'6F' / '9F'）に応じて中身を切り替える
 ///
@@ -919,23 +919,23 @@ class _FloorMapContent extends StatefulWidget {
   final String floor;
   final List<SeatInfo>? seats; // 座席情報（9F の場合は null = 座席機能なし）
   final ValueChanged<FloorMapItem> onSeatTap;
- 
+
   const _FloorMapContent({
     super.key,
     required this.floor,
     required this.seats,
     required this.onSeatTap,
   });
- 
+
   @override
   State<_FloorMapContent> createState() => _FloorMapContentState();
 }
- 
+
 class _FloorMapContentState extends State<_FloorMapContent> {
   final TransformationController _controller = TransformationController();
   bool _isFitReady = false; // フィット計算が完了するまで何も描画しないためのフラグ
   Size? _lastFittedSize; // 直前にフィット計算を行ったビューポートサイズ
- 
+
   // フィット計算で求めたスケールをここに保持し、InteractiveViewer の
   // minScale をこの値より必ず小さく設定する（後述の _fitToScreen 内で更新）。
   // これが固定値（例: 0.3）だと、小さい画面でフィットスケールがそれより
@@ -943,13 +943,13 @@ class _FloorMapContentState extends State<_FloorMapContent> {
   // クランプしてしまい、中央寄せの平行移動と噛み合わずマップが
   // 見切れる・パンできなくなる不具合が起きるため、必ず動的に算出する。
   double _fitScale = 1.0;
- 
+
   /// フロアごとのキャンバスサイズ（_FloorMapCanvas の canvasWidth/canvasHeight と一致させる）
   Size get _canvasSize => switch (widget.floor) {
         '9F' => const Size(792, 720),
         _ => const Size(747, 687),
       };
- 
+
   Widget _buildMapWidget() {
     return switch (widget.floor) {
       '9F' => _FloorMapCanvas(
@@ -968,41 +968,41 @@ class _FloorMapContentState extends State<_FloorMapContent> {
         ),
     };
   }
- 
+
   /// 表示可能エリア(viewportSize)にフロアマップ全体(_canvasSize)が
   /// ちょうど収まるスケールを計算し、中央寄せの変換行列をセットする。
   void _fitToScreen(Size viewportSize) {
     if (!mounted) return;
     if (viewportSize.width <= 0 || viewportSize.height <= 0) return;
- 
+
     final canvas = _canvasSize;
- 
+
     // 横・縦それぞれの縮小率を計算し、小さい方（=全体が必ず収まる方）を採用
     final scaleX = viewportSize.width / canvas.width;
     final scaleY = viewportSize.height / canvas.height;
     final rawScale = (scaleX < scaleY ? scaleX : scaleY) * 0.95; // 少し余白を持たせる
     // 極端に小さい/不正な値にならないよう下限を設ける
     final scale = rawScale > 0.001 ? rawScale : 0.001;
- 
+
     // スケール後のサイズが表示エリアの中央に来るような平行移動量を計算
     final dx = (viewportSize.width - canvas.width * scale) / 2;
     final dy = (viewportSize.height - canvas.height * scale) / 2;
- 
+
     final matrix = Matrix4.identity()
       ..translate(dx, dy)
       ..scale(scale);
- 
+
     _controller.value = matrix;
     _lastFittedSize = viewportSize;
     // InteractiveViewer の minScale をこのフィットスケールより必ず
     // 小さくするための基準値として保持する（build内で使用）。
     _fitScale = scale;
- 
+
     if (!_isFitReady) {
       setState(() => _isFitReady = true);
     }
   }
- 
+
   @override
   void didUpdateWidget(_FloorMapContent oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -1014,19 +1014,19 @@ class _FloorMapContentState extends State<_FloorMapContent> {
       });
     }
   }
- 
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
- 
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
- 
+
         // 初回表示時・フロア切替直後・画面サイズが変わった場合に
         // 全体フィットを(再)計算する。
         // build中に直接setStateやcontroller更新をすると例外になるため
@@ -1034,13 +1034,13 @@ class _FloorMapContentState extends State<_FloorMapContent> {
         final needsFit = _lastFittedSize == null ||
             (_lastFittedSize!.width - viewportSize.width).abs() > 0.5 ||
             (_lastFittedSize!.height - viewportSize.height).abs() > 0.5;
- 
+
         if (needsFit) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _fitToScreen(viewportSize);
           });
         }
- 
+
         // フィット計算が完了するまでは何も描画しない。
         // InteractiveViewer自体をツリーに含めないことで、
         // スケール未調整の状態（左上の一部が拡大されたような見た目、
@@ -1048,7 +1048,7 @@ class _FloorMapContentState extends State<_FloorMapContent> {
         if (!_isFitReady) {
           return const SizedBox.expand();
         }
- 
+
         return ClipRect(
           child: InteractiveViewer(
             transformationController: _controller,
@@ -1099,7 +1099,7 @@ class _FloorMapContentState extends State<_FloorMapContent> {
     );
   }
 }
- 
+
 /// フロアマップ上の1要素（座席・設備・ラベルなど）の配置情報
 /// x, y, width, height は元画像のピクセル座標そのまま使う。
 ///
@@ -1113,7 +1113,7 @@ class FloorMapItem {
   final String? label; // 「入口」のようなテキストラベルがある場合に指定
   final FloorItemType type;
   final int? seatIndex; // type が seat の場合の、対応する SeatInfo リスト内インデックス
- 
+
   const FloorMapItem({
     required this.x,
     required this.y,
@@ -1124,7 +1124,7 @@ class FloorMapItem {
     this.seatIndex,
   });
 }
- 
+
 /// 6Fimage.png から実測した座標データ
 /// （画像を背景差分で解析し、各矩形のx, y, width, heightを抽出したもの）
 ///
@@ -1139,7 +1139,7 @@ const List<FloorMapItem> floor6FItems = [
   FloorMapItem(x: 108, y: 307, width: 45, height: 25, type: FloorItemType.seat, seatIndex: 4),
   FloorMapItem(x: 108, y: 354, width: 45, height: 25, type: FloorItemType.seat, seatIndex: 5),
   FloorMapItem(x: 108, y: 401, width: 45, height: 25, type: FloorItemType.seat, seatIndex: 6),
- 
+
   // --- 中央の座席グリッド（7列 x 5行 = 35個・座席） seatIndex 7-41 ---
   FloorMapItem(x: 216, y: 170, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 7),
   FloorMapItem(x: 260, y: 170, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 8),
@@ -1148,7 +1148,7 @@ const List<FloorMapItem> floor6FItems = [
   FloorMapItem(x: 394, y: 170, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 11),
   FloorMapItem(x: 438, y: 170, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 12),
   FloorMapItem(x: 482, y: 170, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 13),
- 
+
   FloorMapItem(x: 216, y: 209, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 14),
   FloorMapItem(x: 260, y: 209, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 15),
   FloorMapItem(x: 305, y: 209, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 16),
@@ -1156,7 +1156,7 @@ const List<FloorMapItem> floor6FItems = [
   FloorMapItem(x: 394, y: 209, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 18),
   FloorMapItem(x: 438, y: 209, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 19),
   FloorMapItem(x: 482, y: 209, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 20),
- 
+
   FloorMapItem(x: 216, y: 248, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 21),
   FloorMapItem(x: 260, y: 248, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 22),
   FloorMapItem(x: 305, y: 248, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 23),
@@ -1164,7 +1164,7 @@ const List<FloorMapItem> floor6FItems = [
   FloorMapItem(x: 394, y: 248, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 25),
   FloorMapItem(x: 438, y: 248, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 26),
   FloorMapItem(x: 482, y: 248, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 27),
- 
+
   FloorMapItem(x: 216, y: 287, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 28),
   FloorMapItem(x: 260, y: 287, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 29),
   FloorMapItem(x: 305, y: 287, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 30),
@@ -1172,7 +1172,7 @@ const List<FloorMapItem> floor6FItems = [
   FloorMapItem(x: 394, y: 287, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 32),
   FloorMapItem(x: 438, y: 287, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 33),
   FloorMapItem(x: 482, y: 287, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 34),
- 
+
   FloorMapItem(x: 216, y: 326, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 35),
   FloorMapItem(x: 260, y: 326, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 36),
   FloorMapItem(x: 305, y: 326, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 37),
@@ -1180,21 +1180,21 @@ const List<FloorMapItem> floor6FItems = [
   FloorMapItem(x: 394, y: 326, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 39),
   FloorMapItem(x: 438, y: 326, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 40),
   FloorMapItem(x: 482, y: 326, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 41),
- 
+
   // --- 右側の縦に並んだ小さい列（4個・座席） seatIndex 42-45 ---
   FloorMapItem(x: 615, y: 187, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 42),
   FloorMapItem(x: 615, y: 216, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 43),
   FloorMapItem(x: 615, y: 245, width: 26, height: 26, type: FloorItemType.seat, seatIndex: 44),
   FloorMapItem(x: 615, y: 275, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 45),
- 
+
   // --- 下部の会議室2つ（座席扱い） seatIndex 46-47 ---
   FloorMapItem(x: 219, y: 413, width: 89, height: 35, type: FloorItemType.seat, seatIndex: 46),
   FloorMapItem(x: 350, y: 413, width: 89, height: 35, type: FloorItemType.seat, seatIndex: 47),
- 
+
   // --- 入口ラベル（タップ不可） ---
   FloorMapItem(x: 526, y: 519, width: 115, height: 53, label: '入口', type: FloorItemType.label),
 ];
- 
+
 /// 9Fimage.png から実測した座標データ
 /// 左から3列の座席エリア（各7個）+ 右側の受付/棚/小型設備群 + 入口ラベル
 ///
@@ -1209,7 +1209,7 @@ const List<FloorMapItem> floor9FItems = [
   FloorMapItem(x: 159, y: 400, width: 59, height: 39),
   FloorMapItem(x: 159, y: 470, width: 59, height: 39),
   FloorMapItem(x: 159, y: 540, width: 59, height: 39),
- 
+
   // --- 中央列（7個） ---
   FloorMapItem(x: 304, y: 121, width: 58, height: 39),
   FloorMapItem(x: 304, y: 191, width: 58, height: 39),
@@ -1218,7 +1218,7 @@ const List<FloorMapItem> floor9FItems = [
   FloorMapItem(x: 304, y: 400, width: 58, height: 39),
   FloorMapItem(x: 304, y: 470, width: 58, height: 39),
   FloorMapItem(x: 304, y: 540, width: 58, height: 39),
- 
+
   // --- 右寄りの列（7個） ---
   FloorMapItem(x: 448, y: 120, width: 59, height: 40),
   FloorMapItem(x: 448, y: 190, width: 59, height: 40),
@@ -1227,14 +1227,14 @@ const List<FloorMapItem> floor9FItems = [
   FloorMapItem(x: 448, y: 400, width: 59, height: 39),
   FloorMapItem(x: 448, y: 469, width: 59, height: 40),
   FloorMapItem(x: 448, y: 539, width: 59, height: 40),
- 
+
   // --- 右上の大きい矩形（受付や設備など） ---
   FloorMapItem(x: 580, y: 121, width: 78, height: 59),
- 
+
   // --- 右側の縦長2個（棚・パーティションなど） ---
   FloorMapItem(x: 638, y: 191, width: 20, height: 78),
   FloorMapItem(x: 638, y: 273, width: 20, height: 77),
- 
+
   // --- 右下の小さい設備群（9個） ---
   FloorMapItem(x: 638, y: 362, width: 20, height: 20),
   FloorMapItem(x: 615, y: 386, width: 20, height: 20),
@@ -1245,11 +1245,11 @@ const List<FloorMapItem> floor9FItems = [
   FloorMapItem(x: 615, y: 501, width: 20, height: 20),
   FloorMapItem(x: 638, y: 501, width: 20, height: 20),
   FloorMapItem(x: 628, y: 525, width: 20, height: 20),
- 
+
   // --- 入口ラベル ---
   FloorMapItem(x: 567, y: 635, width: 91, height: 42, label: '入口', type: FloorItemType.label),
 ];
- 
+
 /// 座標リスト（FloorMapItem）を実際のキャンバス上に配置して描画するウィジェット。
 /// Stack + Positioned で、画像から実測したピクセル座標をそのまま使用する。
 ///
@@ -1262,7 +1262,7 @@ class _FloorMapCanvas extends StatelessWidget {
   final List<FloorMapItem> items;
   final List<SeatInfo>? seats;
   final ValueChanged<FloorMapItem> onSeatTap;
- 
+
   const _FloorMapCanvas({
     required this.canvasWidth,
     required this.canvasHeight,
@@ -1270,7 +1270,7 @@ class _FloorMapCanvas extends StatelessWidget {
     required this.seats,
     required this.onSeatTap,
   });
- 
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -1304,25 +1304,25 @@ class _FloorMapCanvas extends StatelessWidget {
     );
   }
 }
- 
+
 /// 個々のアイテム（座席 / 設備 / ラベル）の見た目。
 /// 座席は状態に応じて色が変わり、タップ可能。
 class _FloorMapItemView extends StatelessWidget {
   final FloorMapItem item;
   final SeatInfo? seat;
   final VoidCallback onTap;
- 
+
   const _FloorMapItemView({
     required this.item,
     required this.seat,
     required this.onTap,
   });
- 
+
   @override
   Widget build(BuildContext context) {
     // 座席かつ対応する SeatInfo がある場合のみタップ可能・状態色を反映する。
     final bool isTappableSeat = item.type == FloorItemType.seat && seat != null;
- 
+
     Color fillColor;
     Color? borderColor;
     if (isTappableSeat) {
@@ -1332,7 +1332,7 @@ class _FloorMapItemView extends StatelessWidget {
       fillColor = AppColors.gridGray;
       borderColor = null;
     }
- 
+
     final content = Container(
       decoration: BoxDecoration(
         color: fillColor,
@@ -1349,18 +1349,18 @@ class _FloorMapItemView extends StatelessWidget {
             )
           : null,
     );
- 
+
     if (!isTappableSeat) {
       return content;
     }
- 
+
     return GestureDetector(
       onTap: onTap,
       child: content,
     );
   }
 }
- 
+
 /// =========================================================
 /// 座席詳細ボトムシート（memo.dart の SeatDetailDialog を簡略化）
 /// 人名・部署名などの個人情報は表示せず、座席自体の情報のみを表示する。
@@ -1368,17 +1368,17 @@ class _FloorMapItemView extends StatelessWidget {
 class SeatDetailSheet extends StatelessWidget {
   final SeatInfo seat;
   final VoidCallback onToggleOccupied;
- 
+
   const SeatDetailSheet({
     super.key,
     required this.seat,
     required this.onToggleOccupied,
   });
- 
+
   @override
   Widget build(BuildContext context) {
     final isMeeting = seat.name.startsWith('会議室');
- 
+
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -1479,7 +1479,7 @@ class SeatDetailSheet extends StatelessWidget {
       ),
     );
   }
- 
+
   Widget _buildSpecRow(String label, String val) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1490,7 +1490,7 @@ class SeatDetailSheet extends StatelessWidget {
     );
   }
 }
- 
+
 /// =========================================================
 /// 3. ドロワー（ハンバーガーメニュー）
 /// 1階層目: 「フロア選択」「使い方」 ヘッダーは × ボタン
@@ -1500,30 +1500,30 @@ class SeatDetailSheet extends StatelessWidget {
 class FloorDrawer extends StatefulWidget {
   final String currentFloor;
   final ValueChanged<String> onFloorSelected;
- 
+
   const FloorDrawer({
     super.key,
     required this.currentFloor,
     required this.onFloorSelected,
   });
- 
+
   @override
   State<FloorDrawer> createState() => _FloorDrawerState();
 }
- 
+
 enum _DrawerView { menu, floorList }
- 
+
 class _FloorDrawerState extends State<FloorDrawer> {
   _DrawerView _view = _DrawerView.menu;
- 
+
   void _openFloorList() {
     setState(() => _view = _DrawerView.floorList);
   }
- 
+
   void _backToMenu() {
     setState(() => _view = _DrawerView.menu);
   }
- 
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -1581,13 +1581,13 @@ class _FloorDrawerState extends State<FloorDrawer> {
     );
   }
 }
- 
+
 /// ドロワー：1階層目「フロア選択」「使い方」
 class _DrawerMenuList extends StatelessWidget {
   final VoidCallback onFloorSelectTap;
- 
+
   const _DrawerMenuList({super.key, required this.onFloorSelectTap});
- 
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -1600,18 +1600,18 @@ class _DrawerMenuList extends StatelessWidget {
     );
   }
 }
- 
+
 /// ドロワー：2階層目「6F」「9F」一覧
 class _DrawerFloorList extends StatelessWidget {
   final String currentFloor;
   final ValueChanged<String> onFloorTap;
- 
+
   const _DrawerFloorList({
     super.key,
     required this.currentFloor,
     required this.onFloorTap,
   });
- 
+
   @override
   Widget build(BuildContext context) {
     const floors = ['6F', '9F'];
@@ -1629,19 +1629,19 @@ class _DrawerFloorList extends StatelessWidget {
     );
   }
 }
- 
+
 /// ドロワー共通の項目（タップでハイライトする薄緑の背景）
 class _DrawerItem extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
- 
+
   const _DrawerItem({
     required this.label,
     required this.onTap,
     this.selected = false,
   });
- 
+
   @override
   Widget build(BuildContext context) {
     return Material(
