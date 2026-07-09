@@ -367,34 +367,7 @@ class _NavItem extends StatelessWidget {
     );
   }
 }
-void main() async {
-  // Flutterのバインディングを初期化（Firebase初期化前に必須）
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Firebaseの初期化
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
 
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'フロア選択UI',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'NotoSansJP',
-        useMaterial3: true,
-      ),
-      home: const FloorSelectPage(),
-    );
-  }
-}
 
 /// ===== カラーパレット =====
 /// 元デザイン (すわほui-1.png) からピクセル抽出した値
