@@ -111,14 +111,17 @@ class HomePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'キャンパスを選択してください',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                    const SizedBox(
+                      width: double.infinity,
+                      child: Text(
+                        'キャンパスを選択してください',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),
 
@@ -136,6 +139,9 @@ class HomePage extends StatelessWidget {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(24),
                           child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics(),
+                            ),
                             padding: const EdgeInsets.all(12),
                             child: Column(
                               children: [
@@ -167,8 +173,18 @@ class HomePage extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 12),
                                 _CampusCard(
-                                  name: 'OIT 岡山キャンパス',
-                                  subtitle: 'Okayama Campus',
+                                  name: 'ユニバーサルスタジオジャパン',
+                                  subtitle: 'USJ',
+                                ),
+                                const SizedBox(height: 12),
+                                _CampusCard(
+                                  name: 'テストキャンパスA',
+                                  subtitle: 'Dummy A',
+                                ),
+                                const SizedBox(height: 12),
+                                _CampusCard(
+                                  name: 'テストキャンパスB',
+                                  subtitle: 'Dummy B',
                                 ),
                               ],
                             ),
