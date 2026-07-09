@@ -653,10 +653,66 @@ class _FloorMapPageState extends State<FloorMapPage> {
         currentFloor: _currentFloor,
         onFloorSelected: _changeFloor,
       ),
-      // ドロワーが開いたときに本体が右にスライド＆縮小してグレーがかる
-      // 動きを再現するため drawerScrimColor を使いつつ、Builder で
-      // 本体コンテンツに少し縮小エフェクトを掛ける
       drawerScrimColor: Colors.black.withOpacity(0.08),
+      
+      // ↓ここから追加
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.95),
+          border: Border(
+            top: BorderSide(color: Colors.grey.shade200),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            GestureDetector(
+              onTap: () {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.home_outlined, size: 26, color: Colors.grey),
+                  SizedBox(height: 2),
+                  Text('ホーム', style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  )),
+                ],
+              ),
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.people_outline, size: 26, color: Colors.grey),
+                SizedBox(height: 2),
+                Text('フレンド', style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                )),
+              ],
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.qr_code_scanner, size: 26, color: Colors.grey),
+                SizedBox(height: 2),
+                Text('QRコード', style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                )),
+              ],
+            ),
+          ],
+        ),
+      ),
+      // ↑ここまで追加
+      
       body: SafeArea(
         child: Column(
           children: [
