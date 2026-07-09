@@ -3,6 +3,370 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart'; // firebase設定ファイル
 
+
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF8DF172),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ヘッダー
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '田中 太郎',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1A1C1C),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          _HeaderChip(label: 'ログイン'),
+                          const SizedBox(width: 8),
+                          _HeaderChip(label: 'プロフィールを編集'),
+                        ],
+                      ),
+                    ],
+                  ),
+                  // プロフィールアイコン
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.5),
+                        width: 4,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.person,
+                      size: 32,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // 検索バー
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+                child: const TextField(
+                  decoration: InputDecoration(
+                    hintText: '検索',
+                    prefixIcon: Icon(Icons.search, color: Colors.grey),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // キャンパス選択エリア（スクロール可能な四角で囲む）
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'キャンパスを選択してください',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // スクロール可能な四角で囲んだキャンパスカード
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.5),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              children: [
+                                // OIT梅田キャンパス（タップでフロア選択へ）
+                                _CampusCard(
+                                  name: 'OIT 梅田キャンパス',
+                                  subtitle: 'Umeda Campus',
+                                  isFavorite: true,
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      PageRouteBuilder(
+                                        transitionDuration: Duration.zero,
+                                        reverseTransitionDuration: Duration.zero,
+                                        pageBuilder: (_, __, ___) =>
+                                            const FloorSelectPage(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                _CampusCard(
+                                  name: 'OIT 枚方キャンパス',
+                                  subtitle: 'Hirakata Campus',
+                                ),
+                                const SizedBox(height: 12),
+                                _CampusCard(
+                                  name: 'OIT 大宮キャンパス',
+                                  subtitle: 'Omiya Campus',
+                                ),
+                                const SizedBox(height: 12),
+                                _CampusCard(
+                                  name: 'OIT 岡山キャンパス',
+                                  subtitle: 'Okayama Campus',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // ステータス情報
+                    Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'システム正常稼働中 • 更新 2分前',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      // ボトムナビゲーション
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.95),
+          border: Border(
+            top: BorderSide(color: Colors.grey.shade200),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            // ホーム
+            _NavItem(
+              icon: Icons.home,
+              label: 'ホーム',
+              isActive: true,
+            ),
+            // フレンド
+            _NavItem(
+              icon: Icons.people_outline,
+              label: 'フレンド',
+              isActive: false,
+            ),
+            // QRコード（同じサイズ・同じ色）
+            _NavItem(
+              icon: Icons.qr_code_scanner,
+              label: 'QRコード',
+              isActive: false,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderChip extends StatelessWidget {
+  final String label;
+  const _HeaderChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.4)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+}
+
+class _CampusCard extends StatelessWidget {
+  final String name;
+  final String subtitle;
+  final bool isFavorite;
+  final VoidCallback? onTap;
+
+  const _CampusCard({
+    required this.name,
+    required this.subtitle,
+    this.isFavorite = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.75),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 4,
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            if (isFavorite)
+              const Positioned(
+                top: 0,
+                left: 0,
+                child: Text('★', style: TextStyle(color: Colors.amber, fontSize: 18)),
+              ),
+            Column(
+              children: [
+                const Icon(Icons.business, color: Color(0xFF7AD961), size: 24),
+                const SizedBox(height: 6),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    color: Color(0xFF1A1C1C),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isActive;
+
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.isActive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          size: 26,
+          color: isActive ? const Color(0xFF106E00) : Colors.grey,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: isActive ? const Color(0xFF106E00) : Colors.grey,
+          ),
+        ),
+      ],
+    );
+  }
+}
 void main() async {
   // Flutterのバインディングを初期化（Firebase初期化前に必須）
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,7 +391,7 @@ class MyApp extends StatelessWidget {
         fontFamily: 'NotoSansJP',
         useMaterial3: true,
       ),
-      home: const CampusSelectPage(),
+      home: const FloorSelectPage(),
     );
   }
 }
@@ -48,433 +412,6 @@ class AppColors {
   static const Color seatVacantBorder = Color(0xFFBDBDBD);
   static const Color seatOccupied = Color(0xFFEF5350); // 使用中
   static const Color seatOccupiedBorder = Color(0xFFD32F2F);
-}
-
-/// =========================================================
-/// 0. キャンパス選択画面（アプリを開いた時に最初に表示される画面）
-/// アップロードされたデザイン（code.html / Lumina Workspace）を再現。
-///
-/// - キャンパス一覧は四角い枠で囲み、枠の中でスワイプしてスクロールできる。
-/// - 「OIT 梅田キャンパス」をタップするとフロア選択画面（FloorSelectPage）へ遷移する。
-/// - 他のキャンパスは準備中のため、タップするとその旨をスナックバーで表示する。
-/// - 下部ナビゲーションは「ホーム」「フレンド」「QRコード」を同じ大きさ・色で
-///   横並びに表示する（元デザインではQRコードだけ右上に浮き出ていたため統一）。
-/// =========================================================
-
-/// キャンパス1件分の情報
-class _CampusInfo {
-  final String nameJa;
-  final String nameEn;
-  final bool isFavorite; // 星マーク表示（元デザインでは梅田キャンパスのみ）
-  final bool isAvailable; // タップでフロア選択画面へ進めるか
-
-  const _CampusInfo({
-    required this.nameJa,
-    required this.nameEn,
-    this.isFavorite = false,
-    this.isAvailable = false,
-  });
-}
-
-/// 元デザイン（code.html）のカード順そのまま：梅田・枚方・大宮・岡山
-const List<_CampusInfo> _campusList = [
-  _CampusInfo(
-    nameJa: 'OIT 梅田キャンパス',
-    nameEn: 'Umeda Campus',
-    isFavorite: true,
-    isAvailable: true, // ★フロア選択画面へ遷移できるのはこのキャンパスのみ
-  ),
-  _CampusInfo(nameJa: 'OIT 枚方キャンパス', nameEn: 'Hirakata Campus'),
-  _CampusInfo(nameJa: 'OIT 大宮キャンパス', nameEn: 'Omiya Campus'),
-  _CampusInfo(nameJa: 'OIT 岡山キャンパス', nameEn: 'Okayama Campus'),
-];
-
-class CampusSelectPage extends StatefulWidget {
-  const CampusSelectPage({super.key});
-
-  @override
-  State<CampusSelectPage> createState() => _CampusSelectPageState();
-}
-
-class _CampusSelectPageState extends State<CampusSelectPage> {
-  int _navIndex = 0; // 0: ホーム, 1: フレンド, 2: QRコード
-
-  // --- ★変更: OIT梅田キャンパスタップ時にフロア選択画面へ遷移する処理 ---
-  void _onCampusTap(_CampusInfo campus) {
-    if (campus.isAvailable) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const FloorSelectPage()),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${campus.nameJa} は準備中です')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          // 背景：緑地に白い水玉ドット（元デザインの bg-grid-dots を再現）
-          Positioned.fill(
-            child: Container(
-              color: AppColors.mainGreen,
-              child: CustomPaint(painter: _DotGridPainter()),
-            ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildHeader(),
-                        const SizedBox(height: 20),
-                        _buildSearchBar(),
-                        const SizedBox(height: 24),
-                        const Text(
-                          'キャンパスを選択してください',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        // ★キャンパス一覧を四角い枠で囲み、枠内でスワイプしてスクロールできるようにする
-                        _buildCampusListBox(),
-                        const SizedBox(height: 24),
-                        _buildOnlineStatus(),
-                      ],
-                    ),
-                  ),
-                ),
-                _buildBottomNav(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '田中 太郎',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _pillButton('ログイン'),
-                  const SizedBox(width: 8),
-                  _pillButton('プロフィールを編集'),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withOpacity(0.5), width: 4),
-          ),
-          child: const Icon(Icons.person, color: Colors.grey, size: 32),
-        ),
-      ],
-    );
-  }
-
-  Widget _pillButton(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.4)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
-      ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6)],
-      ),
-      child: const TextField(
-        decoration: InputDecoration(
-          hintText: '検索',
-          prefixIcon: Icon(Icons.search, color: Colors.grey),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(vertical: 14),
-        ),
-      ),
-    );
-  }
-
-  /// ★キャンパス一覧を四角い枠（角丸の白い枠線）で囲み、
-  /// 枠の高さを固定することで、枠内でのスワイプ操作でスクロールできるようにする。
-  Widget _buildCampusListBox() {
-    return Container(
-      height: 320, // 枠の高さを固定 → 収まらない分は枠内スクロールで見せる
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.white, width: 2),
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.white.withOpacity(0.15),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Scrollbar(
-        thumbVisibility: true,
-        child: ListView.separated(
-          // 枠内をスワイプしてスクロールできるようにする
-          physics: const BouncingScrollPhysics(),
-          itemCount: _campusList.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) => _CampusCard(
-            campus: _campusList[index],
-            onTap: () => _onCampusTap(_campusList[index]),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOnlineStatus() {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            _PulsingDot(),
-            SizedBox(width: 8),
-            Text(
-              'システム正常稼働中',
-              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-            ),
-            Text('  •  ', style: TextStyle(color: Colors.white70)),
-            Text('更新 2分前', style: TextStyle(color: Colors.white70, fontSize: 12)),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          '現在14人のチームメイトがオンラインです',
-          style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 11),
-        ),
-      ],
-    );
-  }
-
-  /// 下部ナビゲーション：ホーム・フレンド・QRコードを同じ大きさ・色で並べる。
-  /// ★変更: 元デザインではQRコードのアイコンだけ丸背景つきで右上に
-  /// はみ出して表示されていたが、ホーム・フレンドの真隣に、
-  /// 同じ見た目（アイコン＋ラベル、同色・同サイズ）で横並びに統一した。
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE0E0E0))),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _NavItem(
-            icon: Icons.home_rounded,
-            label: 'ホーム',
-            selected: _navIndex == 0,
-            onTap: () => setState(() => _navIndex = 0),
-          ),
-          _NavItem(
-            icon: Icons.people_alt_outlined,
-            label: 'フレンド',
-            selected: _navIndex == 1,
-            onTap: () => setState(() => _navIndex = 1),
-          ),
-          _NavItem(
-            icon: Icons.qr_code_scanner,
-            label: 'QRコード',
-            selected: _navIndex == 2,
-            onTap: () => setState(() => _navIndex = 2),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// キャンパス1件分のカード表示
-class _CampusCard extends StatelessWidget {
-  final _CampusInfo campus;
-  final VoidCallback onTap;
-
-  const _CampusCard({required this.campus, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withOpacity(0.85),
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.4)),
-          ),
-          child: Stack(
-            children: [
-              if (campus.isFavorite)
-                const Positioned(
-                  top: 0,
-                  left: 0,
-                  child: Icon(Icons.star, color: Colors.amber, size: 18),
-                ),
-              Column(
-                children: [
-                  const Icon(Icons.apartment, color: AppColors.mainGreen, size: 26),
-                  const SizedBox(height: 6),
-                  Text(
-                    campus.nameJa,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 17,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    campus.nameEn.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 下部ナビゲーションの1項目（ホーム / フレンド / QRコード 共通の見た目）
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? AppColors.mainGreen : Colors.grey;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 「システム正常稼働中」の横で点滅する緑の丸
-class _PulsingDot extends StatefulWidget {
-  const _PulsingDot();
-
-  @override
-  State<_PulsingDot> createState() => _PulsingDotState();
-}
-
-class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  )..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: Tween(begin: 0.4, end: 1.0).animate(_controller),
-      child: Container(
-        width: 8,
-        height: 8,
-        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-      ),
-    );
-  }
-}
-
-/// 背景の水玉ドット柄を描画する（元デザインの bg-grid-dots を再現）
-class _DotGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white.withOpacity(0.55);
-    const spacing = 24.0;
-    for (double y = 0; y < size.height; y += spacing) {
-      for (double x = 0; x < size.width; x += spacing) {
-        canvas.drawCircle(Offset(x, y), 1.2, paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DotGridPainter oldDelegate) => false;
 }
 
 /// =========================================================
