@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -9,6 +10,10 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+      final user = FirebaseAuth.instance.currentUser;
+      final displayName = (user?.displayName?.isNotEmpty ?? false)
+          ? user!.displayName!
+          : (user?.email ?? 'ゲスト');
     return Scaffold(
       backgroundColor: const Color(0xFF8DF172),
       body: SafeArea(
@@ -23,9 +28,9 @@ class HomePage extends StatelessWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        '田中 太郎',
-                        style: TextStyle(
+                      Text(
+                        displayName,
+                        style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF1A1C1C),
@@ -34,9 +39,12 @@ class HomePage extends StatelessWidget {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          _HeaderChip(label: 'ログイン'),
-                          const SizedBox(width: 8),
-                          _HeaderChip(label: 'プロフィールを編集'),
+                          GestureDetector(
+                            onTap: () async {
+                              await FirebaseAuth.instance.signOut();
+                            },
+                            child: const _HeaderChip(label: 'ログアウト'),
+                          ),
                         ],
                       ),
                     ],
