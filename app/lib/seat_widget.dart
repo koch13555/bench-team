@@ -281,6 +281,7 @@ class _CampusCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.75),
