@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'dart:async';
 import 'firebase_options.dart'; // firebase設定ファイル
 import 'checkin_page.dart';
 import 'friend_screen.dart';
@@ -260,6 +261,7 @@ class HomePage extends StatelessWidget {
                 );
               },
             ),
+            // QRコード（同じサイズ・同じ色）
             _NavItem(
               icon: Icons.qr_code_scanner,
               label: 'QRコード',
@@ -337,34 +339,30 @@ class _CampusCard extends StatelessWidget {
                 left: 0,
                 child: Text('★', style: TextStyle(color: Colors.amber, fontSize: 18)),
               ),
-            SizedBox(
-              width: double.infinity, // ← これを追加してColumn自体を全幅にする
-              child: Column(
-                children: [
-                  const Icon(Icons.business, color: Color(0xFF7AD961), size: 24),
-                  const SizedBox(height: 6),
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 18,
-                      color: Color(0xFF1A1C1C),
-                    ),
-                    textAlign: TextAlign.center,
+            Column(
+              children: [
+                const Icon(Icons.business, color: Color(0xFF7AD961), size: 24),
+                const SizedBox(height: 6),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    color: Color(0xFF1A1C1C),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 1.2,
-                    ),
-                    textAlign: TextAlign.center, // ← 念のため追加
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1.2,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),
@@ -377,18 +375,18 @@ class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isActive;
-  final VoidCallback? onTap;   // ← 追加
+  final VoidCallback? onTap;
 
   const _NavItem({
     required this.icon,
     required this.label,
     required this.isActive,
-    this.onTap,                // ← 追加
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(       // ← Columnをこれで包む
+    return GestureDetector(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -452,12 +450,18 @@ class SeatInfo {
   final List<String> amenities; // 例: ['電源', '窓際']
   final int capacity; // 座れる人数
   bool isOccupied; // 現在誰かが使用中かどうか（個人を特定しない単純な真偽値）
+  bool isProhibited; // 現在使用禁止かどうか
+  int? prohibitedStart; // Firebaseから取得した禁止開始時間
+  int? prohibitedEnd;   // Firebaseから取得した禁止終了時間
 
   SeatInfo({
     required this.name,
     required this.amenities,
     this.capacity = 1,
     this.isOccupied = false,
+    this.isProhibited = false,
+    this.prohibitedStart,
+    this.prohibitedEnd,
   });
 
   bool get hasPower => amenities.contains('電源');
@@ -570,6 +574,23 @@ class _FloorMapPageState extends State<FloorMapPage> {
   late String _currentFloor;
   bool _isLoading = true;
 
+  // 自分が今チェックインしている座席のID(例: 'seat_01')。
+  // どこにもチェックインしていなければ null。
+  String? _myCurrentSeatId;
+  StreamSubscription<DatabaseEvent>? _myLocationSub;
+
+  // 'seat_01' のような文字列を、SeatInfoリストのインデックス(0始まり)に変換する。
+  // ESP32側は座席番号を1始まりで送っているため、-1 して0始まりに揃える。
+  int? get _mySeatIndex {
+    final seatId = _myCurrentSeatId;
+    if (seatId == null) return null;
+    final match = RegExp(r'seat_(\d+)').firstMatch(seatId);
+    if (match == null) return null;
+    final seatNumber = int.tryParse(match.group(1)!);
+    if (seatNumber == null) return null;
+    return seatNumber - 1;
+  }
+
   // フロアごとの座席状態を保持する（着席/退席で更新される）。
   // 6F のみ座席データを持つ。9F は座席機能なし（見た目のみ）。
   late Map<String, List<SeatInfo>> _seatsByFloor;
@@ -585,59 +606,121 @@ class _FloorMapPageState extends State<FloorMapPage> {
   
 
     _listenToFirebase();
+    _listenToMyLocation();
+  }
+  int _currentHour = 9;
+
+  // --- 自分が今どの座席にいるか(user_locations)をリアルタイム監視する処理 ---
+  void _listenToMyLocation() {
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    if (myUid == null) return;
+
+    final database = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: 'https://bench-team-app-default-rtdb.asia-southeast1.firebasedatabase.app',
+    );
+
+    _myLocationSub =
+        database.ref('user_locations/$myUid').onValue.listen((event) {
+      if (!mounted) return;
+      final data = event.snapshot.value;
+      setState(() {
+        if (data == null) {
+          _myCurrentSeatId = null;
+        } else {
+          final map = Map<String, dynamic>.from(data as Map);
+          _myCurrentSeatId = map['seatId'] as String?;
+        }
+      });
+    });
   }
 
-  // --- ★変更: Firebaseのseatsノードをリアルタイム監視する処理 ---
+  @override
+  void dispose() {
+    _myLocationSub?.cancel();
+    super.dispose();
+  }
+
+  // --- ★変更: Firebase監視処理 ---
   void _listenToFirebase() {
     final database = FirebaseDatabase.instanceFor(
       app: Firebase.app(),
       databaseURL: 'https://bench-team-app-default-rtdb.asia-southeast1.firebasedatabase.app',
     );
     
-    // seats ノード全体を監視対象にする
+    // 1. Firebaseから現在の「時間」を取得
+    database.ref('system/current_hour').onValue.listen((event) {
+      if (event.snapshot.value != null) {
+        int newHour = int.tryParse(event.snapshot.value.toString()) ?? 9;
+        if (mounted) {
+          setState(() {
+            _currentHour = newHour;
+            _updateAllSeatsProhibition(); // 時間が変わったら全席の禁止状態を再計算
+          });
+        }
+      }
+    });
+
+    // 2. 座席ごとの利用状況と禁止設定を取得
     final seatsRef = database.ref('seats');
-
-    // データが最初に読み込まれた時、または新しく追加された時
     seatsRef.onChildAdded.listen(_handleSeatEvent);
-
-    // データ（occupied の true/false など）が更新された時
     seatsRef.onChildChanged.listen(_handleSeatEvent);
   }
 
-  // --- ★追加: コマンド文字列を解析して席の着席・離席を更新する処理 ---
-  // --- ★変更: コマンド文字列を解析して指定された席(A-1〜A-4)の着席・離席を更新する処理 ---
-  // --- ★追加: 受信した座席データを解析する処理 ---
+  // --- ★変更: Firebaseから座席ごとの禁止時間を読み取る ---
   void _handleSeatEvent(DatabaseEvent event) {
     if (event.snapshot.value != null) {
       final data = event.snapshot.value as Map<dynamic, dynamic>;
       
-      // 各 seat_XX 内から seat_number と occupied を取得
       final seatNumber = int.tryParse(data['seat_number']?.toString() ?? '');
       final occupied = data['occupied'] == true; 
 
-      if (seatNumber != null) {
-        _updateDeskState(seatNumber, occupied);
+      // 座席個別の禁止時間を取得
+      final pStart = int.tryParse(data['prohibited_start']?.toString() ?? '');
+      final pEnd = int.tryParse(data['prohibited_end']?.toString() ?? '');
+
+      if (seatNumber != null && seatNumber >= 1 && seatNumber <= 7) {
+        int chairIndex = seatNumber - 1; 
+
+        if (mounted) {
+          setState(() {
+            final seats = _seatsByFloor['6F'];
+            if (seats != null && chairIndex >= 0 && chairIndex < seats.length) {
+              
+              // 取得した禁止時間をセット
+              seats[chairIndex].prohibitedStart = pStart;
+              seats[chairIndex].prohibitedEnd = pEnd;
+              
+              _checkProhibitionForSeat(seats[chairIndex]);
+
+              // 禁止されていなければ着席状態を反映
+              if (!seats[chairIndex].isProhibited) {
+                seats[chairIndex].isOccupied = occupied;
+              } else {
+                seats[chairIndex].isOccupied = false; // 禁止なら強制離席
+              }
+            }
+          });
+        }
       }
     }
   }
 
-  // --- ★追加: seat_number に応じて指定デスク(A-1〜A-7)の状態を更新する処理 ---
-  void _updateDeskState(int seatNumber, bool isOccupied) {
-    // 現状は seat_number が 1 から 7 までのデスク (A-1 〜 A-7) を対象にする
-    if (seatNumber >= 1 && seatNumber <= 7) {
-      // 6Fの座席リスト（_buildInitial6FSeats）の0〜6番目がデスクA-1〜A-7に対応しているため、
-      // 席番号から 1 を引いたものをインデックスとする
-      int chairIndex = seatNumber - 1; 
+  // --- 個別の座席が禁止時間帯かどうか判定する ---
+  void _checkProhibitionForSeat(SeatInfo seat) {
+    if (seat.prohibitedStart != null && seat.prohibitedEnd != null) {
+      seat.isProhibited = (_currentHour >= seat.prohibitedStart! && _currentHour < seat.prohibitedEnd!);
+    } else {
+      seat.isProhibited = false;
+    }
+  }
 
-      if (mounted) {
-        setState(() {
-          final seats = _seatsByFloor['6F'];
-          
-          if (seats != null && chairIndex >= 0 && chairIndex < seats.length) {
-            seats[chairIndex].isOccupied = isOccupied;
-          }
-        });
-      }
+  void _updateAllSeatsProhibition() {
+    final seats = _seatsByFloor['6F'];
+    if (seats == null) return;
+    for (var seat in seats) {
+      _checkProhibitionForSeat(seat);
+      if (seat.isProhibited) seat.isOccupied = false;
     }
   }
   /// フロアマップのスケルトン→実体のフェード切り替えを
@@ -789,6 +872,7 @@ class _FloorMapPageState extends State<FloorMapPage> {
                         floor: _currentFloor,
                         seats: seats,
                         onSeatTap: _handleSeatTap,
+                        mySeatIndex: _mySeatIndex,
                       ),
               ),
             ),
@@ -930,12 +1014,14 @@ class _FloorMapContent extends StatefulWidget {
   final String floor;
   final List<SeatInfo>? seats; // 座席情報（9F の場合は null = 座席機能なし）
   final ValueChanged<FloorMapItem> onSeatTap;
+  final int? mySeatIndex; // 自分が今座っている座席のインデックス(いなければnull)
 
   const _FloorMapContent({
     super.key,
     required this.floor,
     required this.seats,
     required this.onSeatTap,
+    this.mySeatIndex,
   });
 
   @override
@@ -969,6 +1055,7 @@ class _FloorMapContentState extends State<_FloorMapContent> {
           items: floor9FItems,
           seats: widget.seats, // 9F は null なので全てタップ不可表示になる
           onSeatTap: widget.onSeatTap,
+          mySeatIndex: widget.mySeatIndex,
         ),
       _ => _FloorMapCanvas(
           canvasWidth: _canvasSize.width,
@@ -976,6 +1063,7 @@ class _FloorMapContentState extends State<_FloorMapContent> {
           items: floor6FItems,
           seats: widget.seats,
           onSeatTap: widget.onSeatTap,
+          mySeatIndex: widget.mySeatIndex,
         ),
     };
   }
@@ -1273,6 +1361,7 @@ class _FloorMapCanvas extends StatelessWidget {
   final List<FloorMapItem> items;
   final List<SeatInfo>? seats;
   final ValueChanged<FloorMapItem> onSeatTap;
+  final int? mySeatIndex;
 
   const _FloorMapCanvas({
     required this.canvasWidth,
@@ -1280,6 +1369,7 @@ class _FloorMapCanvas extends StatelessWidget {
     required this.items,
     required this.seats,
     required this.onSeatTap,
+    this.mySeatIndex,
   });
 
   @override
@@ -1308,6 +1398,7 @@ class _FloorMapCanvas extends StatelessWidget {
                     ? seats![item.seatIndex!]
                     : null,
                 onTap: () => onSeatTap(item),
+                isMine: item.seatIndex != null && item.seatIndex == mySeatIndex,
               ),
             ),
         ],
@@ -1322,11 +1413,13 @@ class _FloorMapItemView extends StatelessWidget {
   final FloorMapItem item;
   final SeatInfo? seat;
   final VoidCallback onTap;
+  final bool isMine; // 自分が今チェックインしている座席かどうか
 
   const _FloorMapItemView({
     required this.item,
     required this.seat,
     required this.onTap,
+    this.isMine = false,
   });
 
   @override
@@ -1336,18 +1429,30 @@ class _FloorMapItemView extends StatelessWidget {
 
     Color fillColor;
     Color? borderColor;
+    double borderWidth = 1;
     if (isTappableSeat) {
-      fillColor = seat!.isOccupied ? AppColors.seatOccupied : AppColors.seatVacant;
-      borderColor = seat!.isOccupied ? AppColors.seatOccupiedBorder : AppColors.seatVacantBorder;
+      if (seat!.isProhibited) {
+        fillColor = Colors.grey.shade400; // 禁止時はグレー
+        borderColor = Colors.grey.shade600;
+      } else {
+        fillColor = seat!.isOccupied ? AppColors.seatOccupied : AppColors.seatVacant;
+        borderColor = seat!.isOccupied ? AppColors.seatOccupiedBorder : AppColors.seatVacantBorder;
+      }
     } else {
       fillColor = AppColors.gridGray;
       borderColor = null;
     }
 
+    // 自分の席には、状態色(空席/使用中/禁止)はそのままに、目立つ青枠を上乗せする
+    if (isMine) {
+      borderColor = const Color(0xFF1565FF);
+      borderWidth = 3;
+    }
+
     final content = Container(
       decoration: BoxDecoration(
         color: fillColor,
-        border: borderColor != null ? Border.all(color: borderColor, width: 1) : null,
+        border: borderColor != null ? Border.all(color: borderColor, width: borderWidth) : null,
       ),
       alignment: Alignment.center,
       child: item.label != null
@@ -1361,13 +1466,36 @@ class _FloorMapItemView extends StatelessWidget {
           : null,
     );
 
+    // 自分の席の右上に小さな目印(自分アイコン)を重ねて表示する
+    final displayContent = isMine
+        ? Stack(
+            clipBehavior: Clip.none,
+            children: [
+              content,
+              Positioned(
+                top: -6,
+                right: -6,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1565FF),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.person, size: 11, color: Colors.white),
+                ),
+              ),
+            ],
+          )
+        : content;
+
     if (!isTappableSeat) {
-      return content;
+      return displayContent;
     }
 
     return GestureDetector(
       onTap: onTap,
-      child: content,
+      child: displayContent,
     );
   }
 }
@@ -1464,10 +1592,10 @@ class SeatDetailSheet extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   elevation: 0,
                 ),
-                onPressed: onToggleOccupied,
-                icon: const Icon(Icons.refresh),
+                onPressed: null,
+                icon: const Icon(Icons.block),
                 label: const Text(
-                  'この席を空席にする',
+                  '現在アプリからは操作できません',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               )
