@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart'; // firebase設定ファイル
+import 'checkin_page.dart';
 
 
 class HomePage extends StatelessWidget {
@@ -258,6 +259,11 @@ class HomePage extends StatelessWidget {
               icon: Icons.qr_code_scanner,
               label: 'QRコード',
               isActive: false,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CheckinPage()),
+                );
+              },
             ),
           ],
         ),
@@ -366,33 +372,38 @@ class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isActive;
+  final VoidCallback? onTap;   // ← 追加
 
   const _NavItem({
     required this.icon,
     required this.label,
     required this.isActive,
+    this.onTap,                // ← 追加
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          size: 26,
-          color: isActive ? const Color(0xFF106E00) : Colors.grey,
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
+    return GestureDetector(       // ← Columnをこれで包む
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 26,
             color: isActive ? const Color(0xFF106E00) : Colors.grey,
           ),
-        ),
-      ],
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: isActive ? const Color(0xFF106E00) : Colors.grey,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

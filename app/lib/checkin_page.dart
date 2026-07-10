@@ -1,0 +1,139 @@
+import 'package:flutter/material.dart';
+import 'seat_checkin_service.dart';
+import 'qr_scanner_page.dart';
+
+/// 座席チェックインの入り口画面。
+/// - QRコードをスキャンしてチェックイン
+/// - 手動で座席番号(例: seat_01)を入力してチェックイン
+///   (カメラが使えない・QRが読み取りにくい場合の保険)
+class CheckinPage extends StatefulWidget {
+  const CheckinPage({super.key});
+
+  @override
+  State<CheckinPage> createState() => _CheckinPageState();
+}
+
+class _CheckinPageState extends State<CheckinPage> {
+  final _service = SeatCheckinService();
+  bool _isLoading = false;
+
+  Future<void> _scanAndCheckIn() async {
+    final rawValue = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const QrScannerPage(title: '座席のQRコードを枠内に合わせてください'),
+      ),
+    );
+    if (rawValue == null) return;
+
+    final seatId = SeatCheckinService.parseCheckinQr(rawValue);
+    if (seatId == null) {
+      _showMessage('座席用のQRコードではないようです');
+      return;
+    }
+    await _checkIn(seatId);
+  }
+
+  Future<void> _manualCheckIn() async {
+    final seatId = await showDialog<String>(
+      context: context,
+      builder: (context) => const _ManualSeatIdDialog(),
+    );
+    if (seatId == null || seatId.isEmpty) return;
+    await _checkIn(seatId);
+  }
+
+  Future<void> _checkIn(String seatId) async {
+    setState(() => _isLoading = true);
+    try {
+      await _service.checkIn(seatId: seatId);
+      _showMessage('$seatId にチェックインしました');
+    } catch (e) {
+      _showMessage('チェックインに失敗しました: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('座席にチェックイン')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: _isLoading
+              ? const CircularProgressIndicator()
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.qr_code_scanner, size: 72, color: Colors.grey),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text('QRコードをスキャン'),
+                        onPressed: _scanAndCheckIn,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: _manualCheckIn,
+                      child: const Text('座席番号を直接入力する'),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 座席番号(seat_01など)を手入力するための簡易ダイアログ
+class _ManualSeatIdDialog extends StatefulWidget {
+  const _ManualSeatIdDialog();
+
+  @override
+  State<_ManualSeatIdDialog> createState() => _ManualSeatIdDialogState();
+}
+
+class _ManualSeatIdDialogState extends State<_ManualSeatIdDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('座席番号を入力'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          hintText: '例: seat_01',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('チェックイン'),
+        ),
+      ],
+    );
+  }
+}
