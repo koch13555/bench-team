@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'seat_checkin_service.dart';
 import 'qr_scanner_page.dart';
+import 'friend_screen.dart';
 
 /// 座席チェックインの入り口画面。
 /// - QRコードをスキャンしてチェックイン
@@ -44,6 +46,14 @@ class _CheckinPageState extends State<CheckinPage> {
   }
 
   Future<void> _checkIn(String seatId) async {
+    // チェックインする前に、今この席に誰か座っていないか確認する
+    final occupant = await _service.getCurrentOccupant(seatId);
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    if (occupant != null && occupant.uid != myUid) {
+      final proceed = await _confirmOccupiedSeat(occupant.displayName);
+      if (proceed != true) return;
+    }
+
     setState(() => _isLoading = true);
     try {
       await _service.checkIn(seatId: seatId);
@@ -55,6 +65,27 @@ class _CheckinPageState extends State<CheckinPage> {
     }
   }
 
+  /// 「現在〇〇さんが座っています。それでもチェックインしますか?」の確認ダイアログ
+  Future<bool?> _confirmOccupiedSeat(String occupantName) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('この席は使用中です'),
+        content: Text('現在「$occupantName」さんが座っています。\nそれでもチェックインしますか?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('チェックインする'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -63,8 +94,10 @@ class _CheckinPageState extends State<CheckinPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF8DF172), // ホーム画面と同じ背景色
       appBar: AppBar(
         title: const Text('座席にチェックイン'),
+        backgroundColor: const Color(0xFF8DF172),
         automaticallyImplyLeading: false, // ← 戻る矢印を非表示にし、下部ナビに統一
       ),
       bottomNavigationBar: Container(
@@ -86,7 +119,11 @@ class _CheckinPageState extends State<CheckinPage> {
               icon: Icons.people_outline,
               label: 'フレンド',
               isActive: false,
-              onTap: null, // 未実装
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const FriendScreen()),
+                );
+              },
             ),
             _NavItem(
               icon: Icons.qr_code_scanner,

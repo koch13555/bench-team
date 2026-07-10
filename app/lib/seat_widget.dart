@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart'; // firebase設定ファイル
 import 'checkin_page.dart';
+import 'friend_screen.dart';
 
 
 class HomePage extends StatelessWidget {
@@ -253,8 +254,12 @@ class HomePage extends StatelessWidget {
               icon: Icons.people_outline,
               label: 'フレンド',
               isActive: false,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const FriendScreen()),
+                );
+              },
             ),
-            // QRコード（同じサイズ・同じ色）
             _NavItem(
               icon: Icons.qr_code_scanner,
               label: 'QRコード',
