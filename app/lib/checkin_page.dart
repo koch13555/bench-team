@@ -63,7 +63,40 @@ class _CheckinPageState extends State<CheckinPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('座席にチェックイン')),
+      appBar: AppBar(
+        title: const Text('座席にチェックイン'),
+        automaticallyImplyLeading: false, // ← 戻る矢印を非表示にし、下部ナビに統一
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.95),
+          border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _NavItem(
+              icon: Icons.home_outlined,
+              label: 'ホーム',
+              isActive: false,
+              onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
+            ),
+            _NavItem(
+              icon: Icons.people_outline,
+              label: 'フレンド',
+              isActive: false,
+              onTap: null, // 未実装
+            ),
+            _NavItem(
+              icon: Icons.qr_code_scanner,
+              label: 'QRコード',
+              isActive: true, // 現在この画面にいるのでハイライト
+              onTap: null,
+            ),
+          ],
+        ),
+      ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -134,6 +167,48 @@ class _ManualSeatIdDialogState extends State<_ManualSeatIdDialog> {
           child: const Text('チェックイン'),
         ),
       ],
+    );
+  }
+}
+
+/// 画面下部の共通ナビ項目(ホーム/フレンド/QRコード)。
+/// seat_widget.dart の同名ウィジェットと見た目を揃えている。
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final VoidCallback? onTap;
+
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.isActive,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 26,
+            color: isActive ? const Color(0xFF106E00) : Colors.grey,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: isActive ? const Color(0xFF106E00) : Colors.grey,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
