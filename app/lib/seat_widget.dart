@@ -326,30 +326,34 @@ class _CampusCard extends StatelessWidget {
                 left: 0,
                 child: Text('★', style: TextStyle(color: Colors.amber, fontSize: 18)),
               ),
-            Column(
-              children: [
-                const Icon(Icons.business, color: Color(0xFF7AD961), size: 24),
-                const SizedBox(height: 6),
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                    color: Color(0xFF1A1C1C),
+            SizedBox(
+              width: double.infinity, // ← これを追加してColumn自体を全幅にする
+              child: Column(
+                children: [
+                  const Icon(Icons.business, color: Color(0xFF7AD961), size: 24),
+                  const SizedBox(height: 6),
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                      color: Color(0xFF1A1C1C),
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 1.2,
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 1.2,
+                    ),
+                    textAlign: TextAlign.center, // ← 念のため追加
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
