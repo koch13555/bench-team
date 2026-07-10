@@ -63,10 +63,8 @@ class _CheckinPageState extends State<CheckinPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF8DF172), // ホーム画面と同じ背景色
       appBar: AppBar(
         title: const Text('座席にチェックイン'),
-        backgroundColor: const Color(0xFF8DF172),
         automaticallyImplyLeading: false, // ← 戻る矢印を非表示にし、下部ナビに統一
       ),
       bottomNavigationBar: Container(
