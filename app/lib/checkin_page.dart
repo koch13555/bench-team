@@ -128,7 +128,7 @@ class _CheckinPageState extends State<CheckinPage> {
             _NavItem(
               icon: Icons.qr_code_scanner,
               label: 'QRコード',
-              isActive: true, // 現在この画面にいるのでハイライト
+              isActive: true,
               onTap: null,
             ),
           ],

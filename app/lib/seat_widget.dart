@@ -232,47 +232,49 @@ class HomePage extends StatelessWidget {
         ),
       ),
 
-      // ボトムナビゲーション
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.95),
-          border: Border(
-            top: BorderSide(color: Colors.grey.shade200),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.95),
+            border: Border(
+              top: BorderSide(color: Colors.grey.shade200),
+            ),
           ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            // ホーム
-            _NavItem(
-              icon: Icons.home,
-              label: 'ホーム',
-              isActive: true,
-            ),
-            // フレンド
-            _NavItem(
-              icon: Icons.people_outline,
-              label: 'フレンド',
-              isActive: false,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const FriendScreen()),
-                );
-              },
-            ),
-            // QRコード（同じサイズ・同じ色）
-            _NavItem(
-              icon: Icons.qr_code_scanner,
-              label: 'QRコード',
-              isActive: false,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CheckinPage()),
-                );
-              },
-            ),
-          ],
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              // ホーム
+              _NavItem(
+                icon: Icons.home,
+                label: 'ホーム',
+                isActive: true,
+              ),
+              // フレンド
+              _NavItem(
+                icon: Icons.people_outline,
+                label: 'フレンド',
+                isActive: false,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const FriendScreen()),
+                  );
+                },
+              ),
+              // QRコード（同じサイズ・同じ色）
+              _NavItem(
+                icon: Icons.qr_code_scanner,
+                label: 'QRコード',
+                isActive: false,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const CheckinPage()),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
