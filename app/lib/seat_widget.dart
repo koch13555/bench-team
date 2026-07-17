@@ -440,53 +440,87 @@ class AppColors {
 /// 座席そのものの情報（コンセント有無などのアメニティ・着席状態）のみを保持する。
 /// =========================================================
 
-/// フロアの外形線(壁)を頂点リストから描画するPainter。
+/// フロアの外形線(壁)や、部屋の内側の仕切り線を頂点リストから描画するPainter。
 /// フロアマップ画像の太い青線を再現するためのもの。
+/// [outlines] は複数の線のリスト。各要素は「閉じた多角形にするか」を
+/// closed で指定できる(部屋の枠は閉じる、途中で終わる仕切り線は閉じない)。
 class _FloorWallPainter extends CustomPainter {
-  final List<Offset> points;
+  final List<_WallPath> outlines;
 
-  _FloorWallPainter(this.points);
+  _FloorWallPainter(this.outlines);
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (points.isEmpty) return;
     final paint = Paint()
       ..color = const Color(0xFF2E6BE6)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 5
       ..strokeJoin = StrokeJoin.miter;
 
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (final p in points.skip(1)) {
-      path.lineTo(p.dx, p.dy);
+    for (final wall in outlines) {
+      if (wall.points.isEmpty) continue;
+      final path = Path()..moveTo(wall.points.first.dx, wall.points.first.dy);
+      for (final p in wall.points.skip(1)) {
+        path.lineTo(p.dx, p.dy);
+      }
+      if (wall.closed) path.close();
+      canvas.drawPath(path, paint);
     }
-    path.close();
-    canvas.drawPath(path, paint);
   }
 
   @override
   bool shouldRepaint(covariant _FloorWallPainter oldDelegate) =>
-      oldDelegate.points != points;
+      oldDelegate.outlines != outlines;
+}
+
+/// 壁の1本分の線データ。[closed]がtrueなら始点と終点をつないで多角形として閉じる。
+class _WallPath {
+  final List<Offset> points;
+  final bool closed;
+  const _WallPath(this.points, {this.closed = true});
 }
 
 /// 6F「フロアマップ.png」の壁(外形線)の頂点座標。
-/// 画像を目視でトレースした概算値のため、細かい凹凸(倉庫の張り出しなど)は
-/// 簡略化している。実機で見て気になる箇所があれば座標を調整する。
-final List<Offset> floor6FWallOutline = [
-  const Offset(175, 175),
-  const Offset(355, 175),
-  const Offset(355, 15),
-  const Offset(735, 15),
-  const Offset(735, 175),
-  const Offset(785, 175),
-  const Offset(785, 320),
-  const Offset(955, 320),
-  const Offset(955, 1210),
-  const Offset(750, 1210),
-  const Offset(750, 1430),
-  const Offset(650, 1430),
-  const Offset(650, 1520),
-  const Offset(175, 1520),
+/// 画像を目視でトレースした概算値のため、細かい凹凸は簡略化している箇所がある。
+/// 実機で見て気になる箇所があれば座標を調整する。
+final List<_WallPath> floor6FWallOutlines = [
+  // --- 外周の壁 ---
+  const _WallPath([
+    Offset(175, 175),
+    Offset(355, 175),
+    Offset(355, 15),
+    Offset(735, 15),
+    Offset(735, 175),
+    Offset(785, 175),
+    Offset(785, 320),
+    Offset(955, 320),
+    Offset(955, 1210),
+    Offset(750, 1210),
+    Offset(750, 1430),
+    Offset(650, 1430),
+    Offset(650, 1520),
+    Offset(175, 1520),
+  ]),
+  // --- 受付カウンターの内側の枠線 ---
+  const _WallPath([
+    Offset(345, 180),
+    Offset(645, 180),
+    Offset(645, 235),
+    Offset(345, 235),
+  ]),
+  // --- 倉庫の部屋の枠線 ---
+  const _WallPath([
+    Offset(170, 1010),
+    Offset(290, 1010),
+    Offset(290, 1140),
+    Offset(170, 1140),
+  ]),
+  // --- グループ席ホールと倉庫・メディアデーク側を区切る仕切り線(閉じない) ---
+  _WallPath(const [
+    Offset(175, 1010),
+    Offset(630, 1010),
+    Offset(630, 1150),
+  ], closed: false),
 ];
 enum FloorItemType {
   seat, // タップして着席/退席できる座席
@@ -998,6 +1032,16 @@ List<SeatInfo> _buildInitial6FSeats() {
     ));
   }
 
+  // ★追加: グリッド下の個人学習テーブル（6席）。既存の座席は一切変更せず末尾に追加している。
+  for (int i = 1; i <= 6; i++) {
+    seats.add(SeatInfo(
+      name: '個人学習テーブル $i',
+      amenities: const ['学習席'],
+      capacity: 1,
+      isOccupied: (i * 3 + 2) % 7 == 0 || (i * 3 + 5) % 9 == 0,
+    ));
+  }
+
   return seats;
 }
 
@@ -1112,7 +1156,7 @@ class _FloorMapContentState extends State<_FloorMapContent> {
           seats: widget.seats,
           onSeatTap: widget.onSeatTap,
           mySeatIndex: widget.mySeatIndex,
-          wallOutline: floor6FWallOutline,
+          wallOutline: floor6FWallOutlines,
         ),
     };
   }
@@ -1348,6 +1392,15 @@ const List<FloorMapItem> floor6FItems = [
   FloorMapItem(x: 810, y: 550, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 51),
   FloorMapItem(x: 810, y: 610, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 52),
 
+  // --- ★追加: グリッド下の個人学習テーブル（6個） seatIndex 53-58 ---
+  // 既存の座席(0-52)は一切変更せず、末尾に追加している。
+  FloorMapItem(x: 265, y: 895, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 53),
+  FloorMapItem(x: 265, y: 940, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 54),
+  FloorMapItem(x: 265, y: 985, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 55),
+  FloorMapItem(x: 530, y: 895, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 56),
+  FloorMapItem(x: 530, y: 940, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 57),
+  FloorMapItem(x: 530, y: 985, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 58),
+
   // --- ここから下はタップ不可の設備・ラベル ---
   FloorMapItem(x: 355, y: 55, width: 110, height: 90, label: '階段', type: FloorItemType.label),
   FloorMapItem(x: 345, y: 180, width: 300, height: 55, label: '受付カウンター', type: FloorItemType.facility),
@@ -1432,7 +1485,7 @@ class _FloorMapCanvas extends StatelessWidget {
   final List<SeatInfo>? seats;
   final ValueChanged<FloorMapItem> onSeatTap;
   final int? mySeatIndex;
-  final List<Offset>? wallOutline; // フロア外形線(壁)の頂点座標。無ければ描画しない。
+  final List<_WallPath>? wallOutline; // フロア外形線(壁)+内側の仕切り線。無ければ描画しない。
 
   const _FloorMapCanvas({
     required this.canvasWidth,
