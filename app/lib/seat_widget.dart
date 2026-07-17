@@ -440,7 +440,54 @@ class AppColors {
 /// 座席そのものの情報（コンセント有無などのアメニティ・着席状態）のみを保持する。
 /// =========================================================
 
-/// フロアマップ上の1要素（座席・設備など）の種別
+/// フロアの外形線(壁)を頂点リストから描画するPainter。
+/// フロアマップ画像の太い青線を再現するためのもの。
+class _FloorWallPainter extends CustomPainter {
+  final List<Offset> points;
+
+  _FloorWallPainter(this.points);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+    final paint = Paint()
+      ..color = const Color(0xFF2E6BE6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeJoin = StrokeJoin.miter;
+
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final p in points.skip(1)) {
+      path.lineTo(p.dx, p.dy);
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FloorWallPainter oldDelegate) =>
+      oldDelegate.points != points;
+}
+
+/// 6F「フロアマップ.png」の壁(外形線)の頂点座標。
+/// 画像を目視でトレースした概算値のため、細かい凹凸(倉庫の張り出しなど)は
+/// 簡略化している。実機で見て気になる箇所があれば座標を調整する。
+final List<Offset> floor6FWallOutline = [
+  const Offset(175, 175),
+  const Offset(355, 175),
+  const Offset(355, 15),
+  const Offset(735, 15),
+  const Offset(735, 175),
+  const Offset(785, 175),
+  const Offset(785, 320),
+  const Offset(955, 320),
+  const Offset(955, 1210),
+  const Offset(750, 1210),
+  const Offset(750, 1430),
+  const Offset(650, 1430),
+  const Offset(650, 1520),
+  const Offset(175, 1520),
+];
 enum FloorItemType {
   seat, // タップして着席/退席できる座席
   facility, // 受付・棚・パーティションなどタップ不可の設備
@@ -1065,6 +1112,7 @@ class _FloorMapContentState extends State<_FloorMapContent> {
           seats: widget.seats,
           onSeatTap: widget.onSeatTap,
           mySeatIndex: widget.mySeatIndex,
+          wallOutline: floor6FWallOutline,
         ),
     };
   }
@@ -1384,6 +1432,7 @@ class _FloorMapCanvas extends StatelessWidget {
   final List<SeatInfo>? seats;
   final ValueChanged<FloorMapItem> onSeatTap;
   final int? mySeatIndex;
+  final List<Offset>? wallOutline; // フロア外形線(壁)の頂点座標。無ければ描画しない。
 
   const _FloorMapCanvas({
     required this.canvasWidth,
@@ -1392,6 +1441,7 @@ class _FloorMapCanvas extends StatelessWidget {
     required this.seats,
     required this.onSeatTap,
     this.mySeatIndex,
+    this.wallOutline,
   });
 
   @override
@@ -1407,6 +1457,13 @@ class _FloorMapCanvas extends StatelessWidget {
           Positioned.fill(
             child: Container(color: Colors.white),
           ),
+          // 壁の輪郭線(青いライン)。実際のフロアマップ画像の外形を再現する。
+          if (wallOutline != null)
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _FloorWallPainter(wallOutline!),
+              ),
+            ),
           // 各アイテム（座席・設備・ラベル）を座標通りに配置
           for (final item in items)
             Positioned(
