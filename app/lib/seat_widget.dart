@@ -695,6 +695,13 @@ class _FloorMapPageState extends State<FloorMapPage> {
   }
   int _currentHour = 9;
 
+  // 災害用モード（フェーズフリー機能）: ON/OFFは手動で切り替える
+  bool _isDisasterMode = false;
+
+  void _toggleDisasterMode() {
+    setState(() => _isDisasterMode = !_isDisasterMode);
+  }
+
   // --- 自分が今どの座席にいるか(user_locations)をリアルタイム監視する処理 ---
   void _listenToMyLocation() {
     final myUid = FirebaseAuth.instance.currentUser?.uid;
@@ -821,7 +828,22 @@ class _FloorMapPageState extends State<FloorMapPage> {
   }
 
   /// 座席タップ時：ボトムシートで詳細を表示し、着席/退席を行う。
+  /// 災害用モード中は「かまどベンチの使い方」を表示する。
   void _handleSeatTap(FloorMapItem item) {
+    if (_isDisasterMode) {
+      final kamadoInfo =
+          item.seatIndex != null ? kamadoBenchInfoBySeatIndex[item.seatIndex] : null;
+      if (kamadoInfo == null) return; // かまどベンチ以外はタップ不可（念のためのガード）
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) => KamadoBenchDetailSheet(info: kamadoInfo),
+      );
+      return;
+    }
+
     final seats = _seatsByFloor[_currentFloor];
     if (seats == null) return;
     final seatIndex = item.seatIndex;
@@ -940,20 +962,45 @@ class _FloorMapPageState extends State<FloorMapPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // ヘッダー（ハンバーガーメニュー）
+            // ヘッダー（ハンバーガーメニュー・災害用モード切替）
             Container(
               width: double.infinity,
               height: 48,
               color: AppColors.mainGreen,
               alignment: Alignment.centerLeft,
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Builder(
-                builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu, color: Colors.white),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
-                ),
+              child: Row(
+                children: [
+                  Builder(
+                    builder: (context) => IconButton(
+                      icon: const Icon(Icons.menu, color: Colors.white),
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(
+                      _isDisasterMode ? Icons.warning : Icons.warning_amber_outlined,
+                      color: _isDisasterMode ? Colors.yellowAccent : Colors.white,
+                    ),
+                    tooltip: '災害用モード切替',
+                    onPressed: _toggleDisasterMode,
+                  ),
+                ],
               ),
             ),
+            // 災害用モード中であることを知らせるバナー
+            if (_isDisasterMode)
+              Container(
+                width: double.infinity,
+                color: Colors.orange,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                alignment: Alignment.center,
+                child: const Text(
+                  '災害用モード：オレンジ色の座席がかまどベンチです',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
             // フロアマップ本体
             Expanded(
               child: AnimatedSwitcher(
@@ -969,6 +1016,7 @@ class _FloorMapPageState extends State<FloorMapPage> {
                         seats: seats,
                         onSeatTap: _handleSeatTap,
                         mySeatIndex: _mySeatIndex,
+                        isDisasterMode: _isDisasterMode,
                       ),
               ),
             ),
@@ -1108,6 +1156,7 @@ class _FloorMapContent extends StatefulWidget {
   final List<SeatInfo>? seats; // 座席情報（9F の場合は null = 座席機能なし）
   final ValueChanged<FloorMapItem> onSeatTap;
   final int? mySeatIndex; // 自分が今座っている座席のインデックス(いなければnull)
+  final bool isDisasterMode; // 災害用モードON/OFF
 
   const _FloorMapContent({
     super.key,
@@ -1115,6 +1164,7 @@ class _FloorMapContent extends StatefulWidget {
     required this.seats,
     required this.onSeatTap,
     this.mySeatIndex,
+    this.isDisasterMode = false,
   });
 
   @override
@@ -1149,6 +1199,7 @@ class _FloorMapContentState extends State<_FloorMapContent> {
           seats: widget.seats, // 9F は null なので全てタップ不可表示になる
           onSeatTap: widget.onSeatTap,
           mySeatIndex: widget.mySeatIndex,
+          isDisasterMode: widget.isDisasterMode,
         ),
       _ => _FloorMapCanvas(
           canvasWidth: _canvasSize.width,
@@ -1158,6 +1209,7 @@ class _FloorMapContentState extends State<_FloorMapContent> {
           onSeatTap: widget.onSeatTap,
           mySeatIndex: widget.mySeatIndex,
           wallOutline: floor6FWallOutlines,
+          isDisasterMode: widget.isDisasterMode,
         ),
     };
   }
@@ -1317,6 +1369,78 @@ class FloorMapItem {
     this.seatIndex,
   });
 }
+
+/// =========================================================
+/// 災害用モード（フェーズフリー機能）
+///
+/// 既存座席の一部を「かまどベンチ」として指定し、災害用モード中は
+/// 色を変えて表示する。タップすると使い方（テキスト＋画像）を表示する。
+///
+/// 対象にしたい座席が決まったら、下の kamadoBenchInfoBySeatIndex の
+/// キー（seatIndex）を変更してください。seatIndexは floor6FItems 内の
+/// 各 FloorMapItem のコメントを参照してください。
+/// =========================================================
+class KamadoBenchInfo {
+  final String title;
+  // assets フォルダに置いた画像のパス（例: 'assets/kamado/kamado_1.png'）。
+  // pubspec.yaml の flutter: assets: に登録が必要。
+  // まだ画像を用意していない場合は null のままでよい（アイコン表示になる）。
+  final String? imageAssetPath;
+  final List<String> usageSteps; // A. かまどを使用する（手順）
+  final List<String> storageSteps; // B. ユニットベンチを収納する（手順）
+  final List<String> cautions; // 使用上の注意
+
+  const KamadoBenchInfo({
+    required this.title,
+    this.imageAssetPath,
+    required this.usageSteps,
+    required this.storageSteps,
+    required this.cautions,
+  });
+}
+
+// 防災かまどベンチ（コトブキ製）の取扱説明書に基づく標準の手順・注意事項。
+// 複数のかまどベンチで同じ内容を使い回すための共通定数。
+const List<String> _kamadoStandardUsageSteps = [
+  '安全のため、作業は必ず2人以上でおこなってください。専用レンチを準備します。',
+  '専用レンチでビスをゆるめ、上部のユニットベンチ（座面）を取り外します。',
+  'ユニットベンチの補助脚を引き出します。',
+  '内部の風防・炭置きパネルを確認し、風防はSフックでグリルに掛け、炭置きはグリルの下にセットします。',
+  '炭置きの上に炭をセットして着火し、グリルの上に鍋・やかんを置いて調理します（設置場所が砂・土でない場合はレンガ等を敷いてから加熱してください）。',
+];
+
+const List<String> _kamadoStandardStorageSteps = [
+  'グリルの上に風防・炭置きパネルを重ねて収納し、その上にSフックを置きます。',
+  'ユニットベンチ（座面）は補助脚を折りたたんでから、脚を本体にセットします（脚をグリルの隙間に通してください）。',
+  'ユニットベンチと本体を専用レンチ・ビスで固定して完成です。',
+];
+
+const List<String> _kamadoStandardCautions = [
+  '加熱時は引火の恐れが無いように、製品の周りに十分なスペースを確保してください。',
+  '設置場所が砂・土でない場合は、レンガ等を敷いた上で加熱をおこなってください。',
+  '加熱後すぐに水をかけると製品が破損する恐れがあります。製品の温度が十分に下がってから清掃してください。',
+  '消火後も製品はしばらく高温です。温度が下がるまで近づいたり、手を触れたりしないでください。',
+];
+
+// 暫定で、中央グリッドの数席をかまどベンチに指定しています。
+// 実際にどの座席をかまどベンチにするか決まったら、
+// このMapのキー（seatIndex）を変更してください。
+const Map<int, KamadoBenchInfo> kamadoBenchInfoBySeatIndex = {
+  7: KamadoBenchInfo(
+    title: 'かまどベンチ 1',
+    imageAssetPath: 'assets/kamado/kamado_1.png',
+    usageSteps: _kamadoStandardUsageSteps,
+    storageSteps: _kamadoStandardStorageSteps,
+    cautions: _kamadoStandardCautions,
+  ),
+  8: KamadoBenchInfo(
+    title: 'かまどベンチ 2',
+    imageAssetPath: 'assets/kamado/kamado_2.png',
+    usageSteps: _kamadoStandardUsageSteps,
+    storageSteps: _kamadoStandardStorageSteps,
+    cautions: _kamadoStandardCautions,
+  ),
+};
 
 /// 「フロアマップ.png」(実際の図書館フロア図)を元にした座標データ。
 ///
@@ -1480,6 +1604,7 @@ class _FloorMapCanvas extends StatelessWidget {
   final ValueChanged<FloorMapItem> onSeatTap;
   final int? mySeatIndex;
   final List<_WallPath>? wallOutline; // フロア外形線(壁)+内側の仕切り線。無ければ描画しない。
+  final bool isDisasterMode;
 
   const _FloorMapCanvas({
     required this.canvasWidth,
@@ -1489,6 +1614,7 @@ class _FloorMapCanvas extends StatelessWidget {
     required this.onSeatTap,
     this.mySeatIndex,
     this.wallOutline,
+    this.isDisasterMode = false,
   });
 
   @override
@@ -1525,6 +1651,9 @@ class _FloorMapCanvas extends StatelessWidget {
                     : null,
                 onTap: () => onSeatTap(item),
                 isMine: item.seatIndex != null && item.seatIndex == mySeatIndex,
+                isDisasterMode: isDisasterMode,
+                kamadoBenchInfo:
+                    item.seatIndex != null ? kamadoBenchInfoBySeatIndex[item.seatIndex] : null,
               ),
             ),
         ],
@@ -1540,23 +1669,46 @@ class _FloorMapItemView extends StatelessWidget {
   final SeatInfo? seat;
   final VoidCallback onTap;
   final bool isMine; // 自分が今チェックインしている座席かどうか
+  final bool isDisasterMode;
+  final KamadoBenchInfo? kamadoBenchInfo;
 
   const _FloorMapItemView({
     required this.item,
     required this.seat,
     required this.onTap,
     this.isMine = false,
+    this.isDisasterMode = false,
+    this.kamadoBenchInfo,
   });
 
   @override
   Widget build(BuildContext context) {
+    final bool isKamadoBench = kamadoBenchInfo != null;
+
     // 座席かつ対応する SeatInfo がある場合のみタップ可能・状態色を反映する。
-    final bool isTappableSeat = item.type == FloorItemType.seat && seat != null;
+    // 災害用モード中は「かまどベンチだけ」がタップ可能になる。
+    final bool isTappableSeat = isDisasterMode
+        ? (item.type == FloorItemType.seat && isKamadoBench)
+        : (item.type == FloorItemType.seat && seat != null);
 
     Color fillColor;
     Color? borderColor;
     double borderWidth = 1;
-    if (isTappableSeat) {
+
+    if (isDisasterMode) {
+      if (item.type == FloorItemType.seat && isKamadoBench) {
+        // かまどベンチはオレンジ色で目立たせる
+        fillColor = Colors.orange;
+        borderColor = Colors.deepOrange;
+      } else if (item.type == FloorItemType.seat) {
+        // かまどベンチ以外の座席は、災害用モード中はグレーアウトする
+        fillColor = Colors.grey.shade300;
+        borderColor = Colors.grey.shade400;
+      } else {
+        fillColor = AppColors.gridGray;
+        borderColor = null;
+      }
+    } else if (isTappableSeat) {
       if (seat!.isProhibited) {
         fillColor = Colors.grey.shade400; // 禁止時はグレー
         borderColor = Colors.grey.shade600;
@@ -1570,7 +1722,8 @@ class _FloorMapItemView extends StatelessWidget {
     }
 
     // 自分の席には、状態色(空席/使用中/禁止)はそのままに、目立つ青枠を上乗せする
-    if (isMine) {
+    // （災害用モード中は自分の席の強調表示はしない）
+    if (isMine && !isDisasterMode) {
       borderColor = const Color(0xFF1565FF);
       borderWidth = 3;
     }
@@ -1593,7 +1746,8 @@ class _FloorMapItemView extends StatelessWidget {
     );
 
     // 自分の席の右上に小さな目印(自分アイコン)を重ねて表示する
-    final displayContent = isMine
+    // （災害用モード中は非表示）
+    final displayContent = (isMine && !isDisasterMode)
         ? Stack(
             clipBehavior: Clip.none,
             children: [
@@ -1622,6 +1776,165 @@ class _FloorMapItemView extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: displayContent,
+    );
+  }
+}
+
+/// 災害用モード：かまどベンチの使い方を表示するボトムシート
+class KamadoBenchDetailSheet extends StatelessWidget {
+  final KamadoBenchInfo info;
+
+  const KamadoBenchDetailSheet({super.key, required this.info});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.local_fire_department, color: Colors.orange, size: 28),
+                  const SizedBox(width: 8),
+                  Text(
+                    info.title,
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // 使い方の画像。assets未登録・ファイル未配置の場合はアイコン表示にフォールバックする
+              if (info.imageAssetPath != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    info.imageAssetPath!,
+                    height: 180,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      height: 180,
+                      color: Colors.grey.shade200,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.image_not_supported, size: 48, color: Colors.grey),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 20),
+              _KamadoSection(
+                heading: 'A. かまどを使用する',
+                steps: info.usageSteps,
+                headingColor: Colors.orange.shade800,
+              ),
+              const SizedBox(height: 20),
+              _KamadoSection(
+                heading: 'B. ユニットベンチを収納する（使用後）',
+                steps: info.storageSteps,
+                headingColor: Colors.blueGrey.shade700,
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.warning_amber, color: Colors.red.shade700, size: 20),
+                        const SizedBox(width: 6),
+                        Text(
+                          '使用上の注意',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    for (final caution in info.cautions)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '・$caution',
+                          style: const TextStyle(fontSize: 13, height: 1.5),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// KamadoBenchDetailSheet内の「見出し＋番号付き手順」を表示する共通パーツ
+class _KamadoSection extends StatelessWidget {
+  final String heading;
+  final List<String> steps;
+  final Color headingColor;
+
+  const _KamadoSection({
+    required this.heading,
+    required this.steps,
+    required this.headingColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          heading,
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: headingColor),
+        ),
+        const SizedBox(height: 8),
+        for (var i = 0; i < steps.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 22,
+                  height: 22,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: headingColor, shape: BoxShape.circle),
+                  child: Text(
+                    '${i + 1}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    steps[i],
+                    style: const TextStyle(fontSize: 14, height: 1.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
