@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'seat_checkin_service.dart';
 import 'qr_scanner_page.dart';
-import 'friend_screen.dart';
+import 'seat_widget.dart'; // goToFriendScreen()を使うため
 
 /// 座席チェックインの入り口画面。
 /// - QRコードをスキャンしてチェックイン
@@ -100,38 +100,37 @@ class _CheckinPageState extends State<CheckinPage> {
         backgroundColor: const Color(0xFF8DF172),
         automaticallyImplyLeading: false, // ← 戻る矢印を非表示にし、下部ナビに統一
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.95),
-          border: Border(top: BorderSide(color: Colors.grey.shade200)),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _NavItem(
-              icon: Icons.home_outlined,
-              label: 'ホーム',
-              isActive: false,
-              onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
-            ),
-            _NavItem(
-              icon: Icons.people_outline,
-              label: 'フレンド',
-              isActive: false,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const FriendScreen()),
-                );
-              },
-            ),
-            _NavItem(
-              icon: Icons.qr_code_scanner,
-              label: 'QRコード',
-              isActive: true,
-              onTap: null,
-            ),
-          ],
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.95),
+            border: Border(top: BorderSide(color: Colors.grey.shade200)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _NavItem(
+                icon: Icons.home_outlined,
+                label: 'ホーム',
+                isActive: false,
+                onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
+              ),
+              _NavItem(
+                icon: Icons.people_outline,
+                label: 'フレンド',
+                isActive: false,
+                onTap: () => goToFriendScreen(context),
+              ),
+              _NavItem(
+                icon: Icons.qr_code_scanner,
+                label: 'QRコード',
+                isActive: true, // 現在この画面にいるのでハイライト
+                onTap: null,
+              ),
+            ],
+          ),
         ),
       ),
       body: Center(

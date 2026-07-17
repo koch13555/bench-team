@@ -8,6 +8,36 @@ import 'firebase_options.dart'; // firebase設定ファイル
 import 'checkin_page.dart';
 import 'friend_screen.dart';
 
+/// フレンド画面への遷移を試みる共通処理。
+/// ゲスト(匿名ログイン)の場合は「誰がどこに座っているか」を扱う
+/// フレンド機能には入れないため、遷移せず案内ダイアログを表示する。
+/// (Firebase側のセキュリティルールでも同様に書き込みを拒否する設計が望ましいが、
+///  ここではユーザーに分かりやすく理由を伝えるために先回りしてブロックする)
+void goToFriendScreen(BuildContext context) {
+  final isGuest = FirebaseAuth.instance.currentUser?.isAnonymous ?? false;
+  if (isGuest) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ゲストはご利用いただけません'),
+        content: const Text(
+          'フレンド機能(誰がどこに座っているかを把握する機能)は、'
+          'アカウントを作成した方のみ利用できます。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('閉じる'),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
+  Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => const FriendScreen()),
+  );
+}
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -258,11 +288,7 @@ class HomePage extends StatelessWidget {
                 icon: Icons.people_outline,
                 label: 'フレンド',
                 isActive: false,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const FriendScreen()),
-                  );
-                },
+                onTap: () => goToFriendScreen(context),
               ),
               // QRコード（同じサイズ・同じ色）
               _NavItem(
@@ -916,11 +942,7 @@ class _FloorMapPageState extends State<FloorMapPage> {
                 ),
               ),
               GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const FriendScreen()),
-                  );
-                },
+                onTap: () => goToFriendScreen(context),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: const [

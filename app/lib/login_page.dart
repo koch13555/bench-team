@@ -73,6 +73,8 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _handleApple() => _run(_authService.signInWithApple);
 
+  Future<void> _handleGuest() => _run(_authService.signInAsGuest);
+
   Future<void> _handleEmailSubmit() {
     final email = _emailController.text;
     final password = _passwordController.text;
@@ -204,6 +206,14 @@ class _LoginPageState extends State<LoginPage> {
                             _isRegisterMode
                                 ? 'すでにアカウントをお持ちの方はこちら'
                                 : 'はじめての方はこちら(新規登録)',
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        TextButton(
+                          onPressed: _handleGuest,
+                          child: const Text(
+                            'ゲストとして利用する(フレンド機能は使えません)',
+                            style: TextStyle(color: Colors.grey),
                           ),
                         ),
                       ],

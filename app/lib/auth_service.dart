@@ -30,6 +30,10 @@ class AuthService {
   /// 現在ログイン中のユーザー(未ログインならnull)
   User? get currentUser => _auth.currentUser;
 
+  /// 現在のユーザーがゲスト(匿名ログイン)かどうか。
+  /// フレンド機能の表示可否を判定する際に、画面側からこれを参照する。
+  bool get isGuest => _auth.currentUser?.isAnonymous ?? false;
+
   /// ログイン状態の変化を監視するStream。
   /// main.dart側のAuthGateがこれを見てLoginPage/HomePageを切り替える。
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -124,6 +128,16 @@ class AuthService {
     }
 
     return userCredential;
+  }
+
+  /// ゲストログイン(匿名認証)。
+  /// 座席の空き状況の閲覧・QRチェックインは可能だが、
+  /// フレンド機能(誰がどこに座っているかの把握)は利用できない。
+  /// この制限はUI側で隠すだけでなく、Firebase側のセキュリティルールでも
+  /// 二重に強制すること(sign_in_provider が anonymous の場合は
+  /// friends / friend_requests への書き込みを拒否する)が望ましい。
+  Future<UserCredential> signInAsGuest() {
+    return _auth.signInAnonymously();
   }
 
   /// メールアドレス + パスワードでログイン
