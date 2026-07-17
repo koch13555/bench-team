@@ -918,52 +918,38 @@ class _FloorMapPageState extends State<FloorMapPage> {
 List<SeatInfo> _buildInitial6FSeats() {
   final List<SeatInfo> seats = [];
 
-  // 左側の列（7席）
+  // 左側の個人学習席（7席・ESP32センサー対応、seat_01〜seat_07）
   for (int i = 1; i <= 7; i++) {
     seats.add(SeatInfo(
-      name: 'デスク A-$i',
-      amenities: i % 2 == 0 ? ['窓際', '電源', 'デュアルモニター'] : ['電源'],
+      name: '個人学習席 $i',
+      amenities: i % 2 == 0 ? ['窓際', '電源'] : ['電源'],
       capacity: 1,
       isOccupied: (i * 4 + 3) % 7 == 0 || (i * 4 + 4) % 9 == 0,
     ));
   }
 
-  // 中央グリッド（5行 x 7列 = 35席）
-  for (int r = 1; r <= 5; r++) {
+  // 中央のグループ席テーブル（6行 x 7列 = 42席）
+  for (int r = 1; r <= 6; r++) {
     for (int c = 1; c <= 7; c++) {
       final idx = (r - 1) * 7 + c;
       seats.add(SeatInfo(
-        name: 'デスク B-$r-$c',
-        amenities: c == 1 || c == 7 ? ['通路側', '電源'] : ['電源', 'モニター設置'],
+        name: 'グループ席 $r-$c',
+        amenities: const ['グループ利用可'],
         capacity: 1,
         isOccupied: (idx * 2 + 3) % 7 == 0 || (idx * 2 + 4) % 9 == 0,
       ));
     }
   }
 
-  // 右側の列（4席）
+  // 個人学習ソファー（4席）
   for (int i = 1; i <= 4; i++) {
     seats.add(SeatInfo(
-      name: 'デスク C-$i',
-      amenities: const ['高セキュリティ', '電源', '静音エリア'],
+      name: '個人学習ソファー $i',
+      amenities: const ['ソファ席', '電源'],
       capacity: 1,
       isOccupied: (i * 5 + 3) % 7 == 0 || (i * 5 + 4) % 9 == 0,
     ));
   }
-
-  // 下部の会議室（2室）
-  seats.add(SeatInfo(
-    name: '会議室 Meeting A',
-    amenities: const ['モニター', 'プロジェクター', 'ホワイトボード', 'テレビ会議システム'],
-    capacity: 8,
-    isOccupied: false,
-  ));
-  seats.add(SeatInfo(
-    name: '会議室 Meeting B',
-    amenities: const ['大型ディスプレイ', '電子黒板', 'マイクスピーカー'],
-    capacity: 10,
-    isOccupied: true,
-  ));
 
   return seats;
 }
@@ -978,7 +964,7 @@ class _FloorMapSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = floor == '9F' ? floor9FItems : floor6FItems;
-    final canvasSize = floor == '9F' ? const Size(792, 720) : const Size(747, 687);
+    final canvasSize = floor == '9F' ? const Size(792, 720) : const Size(980, 1550);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1059,7 +1045,7 @@ class _FloorMapContentState extends State<_FloorMapContent> {
   /// フロアごとのキャンバスサイズ（_FloorMapCanvas の canvasWidth/canvasHeight と一致させる）
   Size get _canvasSize => switch (widget.floor) {
         '9F' => const Size(792, 720),
-        _ => const Size(747, 687),
+        _ => const Size(980, 1550),
       };
 
   Widget _buildMapWidget() {
@@ -1239,74 +1225,95 @@ class FloorMapItem {
   });
 }
 
-/// 6Fimage.png から実測した座標データ
-/// （画像を背景差分で解析し、各矩形のx, y, width, heightを抽出したもの）
+/// 「フロアマップ.png」(実際の図書館フロア図)を元にした座標データ。
 ///
-/// 左列(7)→中央グリッド(35)→右列(4)→会議室(2) の順に
+/// 個人学習席(7)→グループ席グリッド(42)→個人学習ソファー(4) の順に
 /// seatIndex を割り振り、_buildInitial6FSeats() の生成順と対応させている。
+/// 実際にESP32センサーで着席検知できるのは個人学習席(seatIndex 0-6, seat_01〜07)のみ。
+/// それ以外(グループ席・ソファー)はアプリ上でタップして手動チェックインする
+/// 仮想の座席として扱う。
+///
+/// 注記: 座標は画像を目視で概算した値のため、実機で確認しながら
+/// 微調整が必要な場合があります。スクリーンショットを送ってもらえれば調整します。
 const List<FloorMapItem> floor6FItems = [
-  // --- 左側の縦に並んだ列（7個・座席） seatIndex 0-6 ---
-  FloorMapItem(x: 108, y: 120, width: 45, height: 25, type: FloorItemType.seat, seatIndex: 0),
-  FloorMapItem(x: 108, y: 167, width: 45, height: 25, type: FloorItemType.seat, seatIndex: 1),
-  FloorMapItem(x: 108, y: 213, width: 45, height: 26, type: FloorItemType.seat, seatIndex: 2),
-  FloorMapItem(x: 108, y: 260, width: 45, height: 25, type: FloorItemType.seat, seatIndex: 3),
-  FloorMapItem(x: 108, y: 307, width: 45, height: 25, type: FloorItemType.seat, seatIndex: 4),
-  FloorMapItem(x: 108, y: 354, width: 45, height: 25, type: FloorItemType.seat, seatIndex: 5),
-  FloorMapItem(x: 108, y: 401, width: 45, height: 25, type: FloorItemType.seat, seatIndex: 6),
+  // --- 左側の個人学習席（7個・ESP32センサー対応） seatIndex 0-6 ---
+  FloorMapItem(x: 175, y: 275, width: 65, height: 65, type: FloorItemType.seat, seatIndex: 0),
+  FloorMapItem(x: 175, y: 365, width: 65, height: 65, type: FloorItemType.seat, seatIndex: 1),
+  FloorMapItem(x: 175, y: 455, width: 65, height: 65, type: FloorItemType.seat, seatIndex: 2),
+  FloorMapItem(x: 175, y: 545, width: 65, height: 65, type: FloorItemType.seat, seatIndex: 3),
+  FloorMapItem(x: 175, y: 635, width: 65, height: 65, type: FloorItemType.seat, seatIndex: 4),
+  FloorMapItem(x: 175, y: 725, width: 65, height: 65, type: FloorItemType.seat, seatIndex: 5),
+  FloorMapItem(x: 175, y: 810, width: 65, height: 65, type: FloorItemType.seat, seatIndex: 6),
 
-  // --- 中央の座席グリッド（7列 x 5行 = 35個・座席） seatIndex 7-41 ---
-  FloorMapItem(x: 216, y: 170, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 7),
-  FloorMapItem(x: 260, y: 170, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 8),
-  FloorMapItem(x: 305, y: 170, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 9),
-  FloorMapItem(x: 349, y: 170, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 10),
-  FloorMapItem(x: 394, y: 170, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 11),
-  FloorMapItem(x: 438, y: 170, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 12),
-  FloorMapItem(x: 482, y: 170, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 13),
+  // --- 中央のグループ席テーブル（7列 x 6行 = 42個・アプリ内タップで手動チェックイン） seatIndex 7-48 ---
+  FloorMapItem(x: 300, y: 370, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 7),
+  FloorMapItem(x: 375, y: 370, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 8),
+  FloorMapItem(x: 450, y: 370, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 9),
+  FloorMapItem(x: 525, y: 370, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 10),
+  FloorMapItem(x: 600, y: 370, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 11),
+  FloorMapItem(x: 675, y: 370, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 12),
+  FloorMapItem(x: 750, y: 370, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 13),
 
-  FloorMapItem(x: 216, y: 209, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 14),
-  FloorMapItem(x: 260, y: 209, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 15),
-  FloorMapItem(x: 305, y: 209, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 16),
-  FloorMapItem(x: 349, y: 209, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 17),
-  FloorMapItem(x: 394, y: 209, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 18),
-  FloorMapItem(x: 438, y: 209, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 19),
-  FloorMapItem(x: 482, y: 209, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 20),
+  FloorMapItem(x: 300, y: 450, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 14),
+  FloorMapItem(x: 375, y: 450, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 15),
+  FloorMapItem(x: 450, y: 450, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 16),
+  FloorMapItem(x: 525, y: 450, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 17),
+  FloorMapItem(x: 600, y: 450, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 18),
+  FloorMapItem(x: 675, y: 450, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 19),
+  FloorMapItem(x: 750, y: 450, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 20),
 
-  FloorMapItem(x: 216, y: 248, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 21),
-  FloorMapItem(x: 260, y: 248, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 22),
-  FloorMapItem(x: 305, y: 248, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 23),
-  FloorMapItem(x: 349, y: 248, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 24),
-  FloorMapItem(x: 394, y: 248, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 25),
-  FloorMapItem(x: 438, y: 248, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 26),
-  FloorMapItem(x: 482, y: 248, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 27),
+  FloorMapItem(x: 300, y: 530, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 21),
+  FloorMapItem(x: 375, y: 530, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 22),
+  FloorMapItem(x: 450, y: 530, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 23),
+  FloorMapItem(x: 525, y: 530, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 24),
+  FloorMapItem(x: 600, y: 530, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 25),
+  FloorMapItem(x: 675, y: 530, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 26),
+  FloorMapItem(x: 750, y: 530, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 27),
 
-  FloorMapItem(x: 216, y: 287, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 28),
-  FloorMapItem(x: 260, y: 287, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 29),
-  FloorMapItem(x: 305, y: 287, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 30),
-  FloorMapItem(x: 349, y: 287, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 31),
-  FloorMapItem(x: 394, y: 287, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 32),
-  FloorMapItem(x: 438, y: 287, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 33),
-  FloorMapItem(x: 482, y: 287, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 34),
+  FloorMapItem(x: 300, y: 610, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 28),
+  FloorMapItem(x: 375, y: 610, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 29),
+  FloorMapItem(x: 450, y: 610, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 30),
+  FloorMapItem(x: 525, y: 610, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 31),
+  FloorMapItem(x: 600, y: 610, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 32),
+  FloorMapItem(x: 675, y: 610, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 33),
+  FloorMapItem(x: 750, y: 610, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 34),
 
-  FloorMapItem(x: 216, y: 326, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 35),
-  FloorMapItem(x: 260, y: 326, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 36),
-  FloorMapItem(x: 305, y: 326, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 37),
-  FloorMapItem(x: 349, y: 326, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 38),
-  FloorMapItem(x: 394, y: 326, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 39),
-  FloorMapItem(x: 438, y: 326, width: 25, height: 25, type: FloorItemType.seat, seatIndex: 40),
-  FloorMapItem(x: 482, y: 326, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 41),
+  FloorMapItem(x: 300, y: 690, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 35),
+  FloorMapItem(x: 375, y: 690, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 36),
+  FloorMapItem(x: 450, y: 690, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 37),
+  FloorMapItem(x: 525, y: 690, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 38),
+  FloorMapItem(x: 600, y: 690, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 39),
+  FloorMapItem(x: 675, y: 690, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 40),
+  FloorMapItem(x: 750, y: 690, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 41),
 
-  // --- 右側の縦に並んだ小さい列（4個・座席） seatIndex 42-45 ---
-  FloorMapItem(x: 615, y: 187, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 42),
-  FloorMapItem(x: 615, y: 216, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 43),
-  FloorMapItem(x: 615, y: 245, width: 26, height: 26, type: FloorItemType.seat, seatIndex: 44),
-  FloorMapItem(x: 615, y: 275, width: 26, height: 25, type: FloorItemType.seat, seatIndex: 45),
+  FloorMapItem(x: 300, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 42),
+  FloorMapItem(x: 375, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 43),
+  FloorMapItem(x: 450, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 44),
+  FloorMapItem(x: 525, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 45),
+  FloorMapItem(x: 600, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 46),
+  FloorMapItem(x: 675, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 47),
+  FloorMapItem(x: 750, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 48),
 
-  // --- 下部の会議室2つ（座席扱い） seatIndex 46-47 ---
-  FloorMapItem(x: 219, y: 413, width: 89, height: 35, type: FloorItemType.seat, seatIndex: 46),
-  FloorMapItem(x: 350, y: 413, width: 89, height: 35, type: FloorItemType.seat, seatIndex: 47),
+  // --- 個人学習ソファー（4個） seatIndex 49-52 ---
+  FloorMapItem(x: 810, y: 430, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 49),
+  FloorMapItem(x: 810, y: 490, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 50),
+  FloorMapItem(x: 810, y: 550, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 51),
+  FloorMapItem(x: 810, y: 610, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 52),
 
-  // --- 入口ラベル（タップ不可） ---
-  FloorMapItem(x: 526, y: 519, width: 115, height: 53, label: '入口', type: FloorItemType.label),
+  // --- ここから下はタップ不可の設備・ラベル ---
+  FloorMapItem(x: 355, y: 55, width: 110, height: 90, label: '階段', type: FloorItemType.label),
+  FloorMapItem(x: 345, y: 180, width: 300, height: 55, label: '受付カウンター', type: FloorItemType.facility),
+  FloorMapItem(x: 735, y: 230, width: 40, height: 90, label: '出入口', type: FloorItemType.label),
+  FloorMapItem(x: 805, y: 700, width: 110, height: 170, label: 'ソファコーナー', type: FloorItemType.facility),
+  FloorMapItem(x: 825, y: 955, width: 60, height: 230, label: '支援\nカウンター', type: FloorItemType.facility),
+  FloorMapItem(x: 30, y: 540, width: 90, height: 90, label: '検索端末', type: FloorItemType.facility),
+  FloorMapItem(x: 30, y: 690, width: 90, height: 90, label: '自動貸出\n返却機', type: FloorItemType.facility),
+  FloorMapItem(x: 170, y: 1010, width: 120, height: 130, label: '倉庫', type: FloorItemType.facility),
+  FloorMapItem(x: 310, y: 1035, width: 90, height: 90, label: '検索端末', type: FloorItemType.facility),
+  FloorMapItem(x: 440, y: 1195, width: 110, height: 210, label: 'メディア\nデーク', type: FloorItemType.facility),
+  FloorMapItem(x: 825, y: 1215, width: 90, height: 90, label: '検索端末', type: FloorItemType.facility),
+  FloorMapItem(x: 725, y: 1275, width: 90, height: 90, label: '自動貸出\n返却機', type: FloorItemType.facility),
+  FloorMapItem(x: 650, y: 1430, width: 100, height: 90, label: '出入口', type: FloorItemType.label),
 ];
 
 /// 9Fimage.png から実測した座標データ
