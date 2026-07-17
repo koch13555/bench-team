@@ -1009,8 +1009,8 @@ List<SeatInfo> _buildInitial6FSeats() {
     ));
   }
 
-  // 中央のグループ席テーブル（6行 x 7列 = 42席）
-  for (int r = 1; r <= 6; r++) {
+  // 中央のグループ席テーブル（5行 x 7列 = 35席）
+  for (int r = 1; r <= 5; r++) {
     for (int c = 1; c <= 7; c++) {
       final idx = (r - 1) * 7 + c;
       seats.add(SeatInfo(
@@ -1032,12 +1032,13 @@ List<SeatInfo> _buildInitial6FSeats() {
     ));
   }
 
-  // ★追加: グリッド下の個人学習テーブル（6席）。既存の座席は一切変更せず末尾に追加している。
-  for (int i = 1; i <= 6; i++) {
+  // グリッド下の個人学習テーブル(2卓)。
+  // 見た目上は3区画ずつの横長テーブルだが、3つで1つのテーブル(1席)として扱う。
+  for (int i = 1; i <= 2; i++) {
     seats.add(SeatInfo(
       name: '個人学習テーブル $i',
       amenities: const ['学習席'],
-      capacity: 1,
+      capacity: 3,
       isOccupied: (i * 3 + 2) % 7 == 0 || (i * 3 + 5) % 9 == 0,
     ));
   }
@@ -1378,28 +1379,21 @@ const List<FloorMapItem> floor6FItems = [
   FloorMapItem(x: 675, y: 690, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 40),
   FloorMapItem(x: 750, y: 690, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 41),
 
-  FloorMapItem(x: 300, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 42),
-  FloorMapItem(x: 375, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 43),
-  FloorMapItem(x: 450, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 44),
-  FloorMapItem(x: 525, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 45),
-  FloorMapItem(x: 600, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 46),
-  FloorMapItem(x: 675, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 47),
-  FloorMapItem(x: 750, y: 770, width: 30, height: 30, type: FloorItemType.seat, seatIndex: 48),
+  // --- 個人学習ソファー（4個） seatIndex 42-45 ---
+  FloorMapItem(x: 810, y: 430, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 42),
+  FloorMapItem(x: 810, y: 490, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 43),
+  FloorMapItem(x: 810, y: 550, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 44),
+  FloorMapItem(x: 810, y: 610, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 45),
 
-  // --- 個人学習ソファー（4個） seatIndex 49-52 ---
-  FloorMapItem(x: 810, y: 430, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 49),
-  FloorMapItem(x: 810, y: 490, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 50),
-  FloorMapItem(x: 810, y: 550, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 51),
-  FloorMapItem(x: 810, y: 610, width: 45, height: 45, type: FloorItemType.seat, seatIndex: 52),
-
-  // --- ★追加: グリッド下の個人学習テーブル（6個） seatIndex 53-58 ---
-  // 既存の座席(0-52)は一切変更せず、末尾に追加している。
-  FloorMapItem(x: 265, y: 895, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 53),
-  FloorMapItem(x: 265, y: 940, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 54),
-  FloorMapItem(x: 265, y: 985, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 55),
-  FloorMapItem(x: 530, y: 895, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 56),
-  FloorMapItem(x: 530, y: 940, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 57),
-  FloorMapItem(x: 530, y: 985, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 58),
+  // --- グリッド下の個人学習テーブル（2卓、各3区画） seatIndex 46-47 ---
+  // 見た目は3枚の横長パーツだが、同じseatIndexを共有させることで
+  // 「3区画で1つのテーブル」としてどこをタップしても同じ席として扱われる。
+  FloorMapItem(x: 265, y: 895, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 46),
+  FloorMapItem(x: 265, y: 940, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 46),
+  FloorMapItem(x: 265, y: 985, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 46),
+  FloorMapItem(x: 530, y: 895, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 47),
+  FloorMapItem(x: 530, y: 940, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 47),
+  FloorMapItem(x: 530, y: 985, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 47),
 
   // --- ここから下はタップ不可の設備・ラベル ---
   FloorMapItem(x: 355, y: 55, width: 110, height: 90, label: '階段', type: FloorItemType.label),
