@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'firebase_db.dart';
 
 /// QRコードを読み取って座席にチェックインする処理を扱うサービスクラス
 ///
@@ -10,7 +11,7 @@ import 'package:firebase_database/firebase_database.dart';
 ///  - checkins/{seatId}       … その席に「誰が」座っているか(表示名つき)
 ///  - user_locations/{myUid}  … 自分が「今どの席にいるか」(フレンド画面用の逆引き)
 class SeatCheckinService {
-  final _db = FirebaseDatabase.instance;
+  final _db = appDatabase;
   final _auth = FirebaseAuth.instance;
 
   String get _myUid {

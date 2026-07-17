@@ -65,10 +65,12 @@ class _QrScannerPageState extends State<QrScannerPage> {
           // 中央のスキャン枠(見た目だけの装飾。実際の検知範囲はカメラ全体)
           const Center(child: _ScanFrame()),
           // 下部の案内文
+          // MediaQueryのpadding.bottomを足すことで、
+          // 機種ごとのホームインジケーター/ジェスチャーバーと重ならないようにする
           Positioned(
             left: 24,
             right: 24,
-            bottom: 48,
+            bottom: 48 + MediaQuery.of(context).padding.bottom,
             child: Text(
               widget.title,
               textAlign: TextAlign.center,

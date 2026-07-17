@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
+import 'google_signin_button.dart';
 
 /// アプリ初回起動時に表示するログイン画面。
 /// Google / Apple / メールアドレスでのログイン・新規登録に対応。
@@ -21,14 +23,29 @@ class _LoginPageState extends State<LoginPage> {
 
   bool _isRegisterMode = false;
   bool _isLoading = false;
+  StreamSubscription<Object>? _webGoogleErrorSub;
 
   bool get _showAppleButton => !kIsWeb && (Platform.isIOS || Platform.isMacOS);
+
+  @override
+  void initState() {
+    super.initState();
+    // Web版のGoogle公式ボタン(renderButton)は、事前にinitialize()が
+    // 呼ばれていないと使えないため、画面表示前にここで済ませておく。
+    _authService.ensureGoogleInitialized();
+    // Web版はボタン自体がログインを完結させるため、
+    // 失敗した場合のエラーだけこちらで受け取ってスナックバー表示する。
+    _webGoogleErrorSub = _authService.webGoogleSignInErrors.listen((error) {
+      _showError('Googleログインに失敗しました: $error');
+    });
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
+    _webGoogleErrorSub?.cancel();
     super.dispose();
   }
 
@@ -108,11 +125,8 @@ class _LoginPageState extends State<LoginPage> {
                 if (_isLoading)
                   const CircularProgressIndicator(color: Colors.white)
                 else ...[
-                  _SocialButton(
-                    label: 'Googleでログイン',
-                    icon: Icons.g_mobiledata,
-                    onTap: _handleGoogle,
-                  ),
+                  // Android/iOSは従来ボタン、Webは自動的にGoogle公式ボタンに切り替わる
+                  buildGoogleSignInButton(onPressed: _handleGoogle),
                   if (_showAppleButton) ...[
                     const SizedBox(height: 12),
                     _SocialButton(

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'firebase_db.dart';
 import 'dart:async';
 import 'firebase_options.dart'; // firebase設定ファイル
 import 'checkin_page.dart';
@@ -232,6 +233,7 @@ class HomePage extends StatelessWidget {
         ),
       ),
 
+      // ボトムナビゲーション
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
@@ -617,10 +619,7 @@ class _FloorMapPageState extends State<FloorMapPage> {
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     if (myUid == null) return;
 
-    final database = FirebaseDatabase.instanceFor(
-      app: Firebase.app(),
-      databaseURL: 'https://bench-team-app-default-rtdb.asia-southeast1.firebasedatabase.app',
-    );
+    final database = appDatabase;
 
     _myLocationSub =
         database.ref('user_locations/$myUid').onValue.listen((event) {
@@ -645,10 +644,7 @@ class _FloorMapPageState extends State<FloorMapPage> {
 
   // --- ★変更: Firebase監視処理 ---
   void _listenToFirebase() {
-    final database = FirebaseDatabase.instanceFor(
-      app: Firebase.app(),
-      databaseURL: 'https://bench-team-app-default-rtdb.asia-southeast1.firebasedatabase.app',
-    );
+    final database = appDatabase;
     
     // 1. Firebaseから現在の「時間」を取得
     database.ref('system/current_hour').onValue.listen((event) {
@@ -786,59 +782,76 @@ class _FloorMapPageState extends State<FloorMapPage> {
       drawerScrimColor: Colors.black.withOpacity(0.08),
       
       // ↓ここから追加
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.95),
-          border: Border(
-            top: BorderSide(color: Colors.grey.shade200),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.95),
+            border: Border(
+              top: BorderSide(color: Colors.grey.shade200),
+            ),
           ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            GestureDetector(
-              onTap: () {
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.home_outlined, size: 26, color: Colors.grey),
-                  SizedBox(height: 2),
-                  Text('ホーム', style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                  )),
-                ],
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.home_outlined, size: 26, color: Colors.grey),
+                    SizedBox(height: 2),
+                    Text('ホーム', style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                    )),
+                  ],
+                ),
               ),
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.people_outline, size: 26, color: Colors.grey),
-                SizedBox(height: 2),
-                Text('フレンド', style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                )),
-              ],
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.qr_code_scanner, size: 26, color: Colors.grey),
-                SizedBox(height: 2),
-                Text('QRコード', style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                )),
-              ],
-            ),
-          ],
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const FriendScreen()),
+                  );
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.people_outline, size: 26, color: Colors.grey),
+                    SizedBox(height: 2),
+                    Text('フレンド', style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                    )),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const CheckinPage()),
+                  );
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.qr_code_scanner, size: 26, color: Colors.grey),
+                    SizedBox(height: 2),
+                    Text('QRコード', style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                    )),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       // ↑ここまで追加

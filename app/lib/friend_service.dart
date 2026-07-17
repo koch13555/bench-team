@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'firebase_db.dart';
 
 /// 自分宛に届いているフレンド申請1件分のデータ
 class FriendRequest {
@@ -39,7 +40,7 @@ class FriendStatus {
 /// そのため、別途 `users/{uid}/name` ノードを参照する必要はなく、
 /// 申請時にその場の displayName をそのまま添えて送る方式にしている。
 class FriendService {
-  final _db = FirebaseDatabase.instance;
+  final _db = appDatabase;
   final _auth = FirebaseAuth.instance;
 
   String get _myUid {

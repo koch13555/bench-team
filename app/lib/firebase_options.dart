@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -57,6 +54,15 @@ class DefaultFirebaseOptions {
     appId: '1:143080921845:android:3e90768e519974b88883bc',
     messagingSenderId: '143080921845',
     projectId: 'bench-team-app',
+    databaseURL: 'https://bench-team-app-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'bench-team-app.firebasestorage.app',
+  );
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyC_HWWbkOhS1paKLCAe8DpB2iR38v8ccCg',
+    appId: '1:143080921845:web:e0121a1b03b553f88883bc',
+    messagingSenderId: '143080921845',
+    projectId: 'bench-team-app',
+    authDomain: 'bench-team-app.firebaseapp.com',
     databaseURL: 'https://bench-team-app-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'bench-team-app.firebasestorage.app',
   );

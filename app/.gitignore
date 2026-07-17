@@ -44,9 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 <<<<<<< HEAD
-app/lib/generated_plugin_registrant.dart
-app/lib/generated_plugin_registrant.dart
-app/lib/generated_plugin_registrant.dart
 app/.dart_tool/
 app/.dart_tool/dartpad/
 =======

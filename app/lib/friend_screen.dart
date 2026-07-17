@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'friend_service.dart';
 import 'qr_scanner_page.dart';
+import 'checkin_page.dart';
 
 /// 自分のQRコード表示・相手のQR読み取り・フレンド申請一覧・
 /// フレンドが今どの座席にいるかの表示を扱う画面
@@ -35,6 +36,43 @@ class _FriendScreenState extends State<FriendScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('フレンド')),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.95),
+            border: Border(top: BorderSide(color: Colors.grey.shade200)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _NavItem(
+                icon: Icons.home_outlined,
+                label: 'ホーム',
+                isActive: false,
+                onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
+              ),
+              _NavItem(
+                icon: Icons.people_outline,
+                label: 'フレンド',
+                isActive: true, // 現在この画面にいるのでハイライト
+                onTap: null,
+              ),
+              _NavItem(
+                icon: Icons.qr_code_scanner,
+                label: 'QRコード',
+                isActive: false,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const CheckinPage()),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: () async => _refreshFriends(),
         child: ListView(
@@ -181,5 +219,47 @@ class _FriendScreenState extends State<FriendScreen> {
         );
       }
     }
+  }
+}
+
+/// 画面下部の共通ナビ項目(ホーム/フレンド/QRコード)。
+/// checkin_page.dart / seat_widget.dart の同名ウィジェットと見た目を揃えている。
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final VoidCallback? onTap;
+
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.isActive,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 26,
+            color: isActive ? const Color(0xFF106E00) : Colors.grey,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: isActive ? const Color(0xFF106E00) : Colors.grey,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
