@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'firebase_db.dart';
+import 'notification_service.dart';
 
 /// QRコードを読み取って座席にチェックインする処理を扱うサービスクラス
 ///
@@ -80,7 +81,19 @@ class SeatCheckinService {
       },
     };
     await _db.ref().update(updates);
+
+    // 3分放置(ESP32側の自動離席判定と同じ時間)で「まだ使いますか?」を通知する。
+    // ローカル通知のため、アプリが完全に終了していると届かない場合がある。
+    NotificationService.instance.scheduleCheckinReminder(
+      id: _notificationIdFor(seatId),
+      seatId: seatId,
+      delay: const Duration(minutes: 3),
+    );
   }
+
+  /// seatIdから通知ID(int)を決定的に生成する。
+  /// 同じ座席なら常に同じIDになるため、checkOut時に確実にキャンセルできる。
+  int _notificationIdFor(String seatId) => seatId.hashCode & 0x7fffffff;
 
   /// 自分から自主的にチェックアウトする(QRを使わない、アプリ内ボタン用)
   /// ※通常は人感センサ側の離席検知で自動的に消えるが、

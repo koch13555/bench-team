@@ -7,6 +7,15 @@ import 'dart:async';
 import 'firebase_options.dart'; // firebase設定ファイル
 import 'checkin_page.dart';
 import 'friend_screen.dart';
+import 'profile_page.dart';
+import 'profile_avatar.dart';
+import 'main.dart';
+import 'how_to_use_page.dart';
+import 'about_page.dart';
+import 'feedback_page.dart';
+import 'terms_page.dart';
+import 'auth_service.dart';
+import 'notification_service.dart';
 
 /// フレンド画面への遷移を試みる共通処理。
 /// ゲスト(匿名ログイン)の場合は「誰がどこに座っているか」を扱う
@@ -39,8 +48,149 @@ void goToFriendScreen(BuildContext context) {
   );
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  // --- フレンド申請の通知用 ---
+  StreamSubscription<DatabaseEvent>? _friendRequestsSub;
+  Set<String> _knownRequestUids = {};
+
+  // --- フレンドが着席したかの通知用 ---
+  StreamSubscription<DatabaseEvent>? _friendsListSub;
+  final Map<String, StreamSubscription<DatabaseEvent>> _friendLocationSubs = {};
+  final Map<String, String?> _lastKnownFriendSeat = {};
+  final Map<String, String> _friendNames = {};
+
+  // --- 離席時にQRチェックイン状態を自動でログアウトさせる仕組み ---
+  StreamSubscription<DatabaseEvent>? _myLocationSub;
+  StreamSubscription<DatabaseEvent>? _myCheckinSub;
+  String? _myWatchedSeatId;
+
+  @override
+  void initState() {
+    super.initState();
+    _watchFriendRequests();
+    _watchFriendsList();
+    _watchMyOwnCheckin();
+  }
+
+  @override
+  void dispose() {
+    _friendRequestsSub?.cancel();
+    _friendsListSub?.cancel();
+    for (final sub in _friendLocationSubs.values) {
+      sub.cancel();
+    }
+    _myLocationSub?.cancel();
+    _myCheckinSub?.cancel();
+    super.dispose();
+  }
+
+  /// フレンド申請が新しく届いたら通知する
+  void _watchFriendRequests() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    _friendRequestsSub = appDatabase.ref('friend_requests/$uid').onValue.listen((event) {
+      final data = event.snapshot.value;
+      final currentUids = <String>{};
+      if (data is Map) {
+        currentUids.addAll(data.keys.map((k) => k.toString()));
+      }
+      final newOnes = currentUids.difference(_knownRequestUids);
+      for (final fromUid in newOnes) {
+        final entry = data is Map ? data[fromUid] : null;
+        final fromName = entry is Map ? (entry['fromName']?.toString() ?? '不明なユーザー') : '不明なユーザー';
+        NotificationService.instance.showFriendRequestNotification(fromName);
+      }
+      _knownRequestUids = currentUids;
+    });
+  }
+
+  /// フレンド一覧を監視し、それぞれの着席状況の監視を開始/終了する
+  void _watchFriendsList() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    _friendsListSub = appDatabase.ref('friends/$uid').onValue.listen((event) {
+      final data = event.snapshot.value;
+      final currentFriendUids = <String>{};
+      if (data is Map) {
+        for (final entry in data.entries) {
+          final friendUid = entry.key.toString();
+          currentFriendUids.add(friendUid);
+          final value = entry.value;
+          if (value is Map) {
+            _friendNames[friendUid] = (value['name'] ?? '名前未設定').toString();
+          }
+          if (!_friendLocationSubs.containsKey(friendUid)) {
+            _watchFriendLocation(friendUid);
+          }
+        }
+      }
+      // フレンドでなくなった相手の監視は止める
+      final removed = _friendLocationSubs.keys.toSet().difference(currentFriendUids);
+      for (final r in removed) {
+        _friendLocationSubs[r]?.cancel();
+        _friendLocationSubs.remove(r);
+        _lastKnownFriendSeat.remove(r);
+      }
+    });
+  }
+
+  /// 特定のフレンドの現在地を監視し、「座っていなかった→座った」の
+  /// 変化があった瞬間だけ通知する
+  void _watchFriendLocation(String friendUid) {
+    _friendLocationSubs[friendUid] =
+        appDatabase.ref('user_locations/$friendUid').onValue.listen((event) {
+      final data = event.snapshot.value;
+      final seatId = data is Map ? data['seatId'] as String? : null;
+      final lastSeat = _lastKnownFriendSeat[friendUid];
+
+      if (seatId != null && lastSeat == null) {
+        final name = _friendNames[friendUid] ?? '友達';
+        NotificationService.instance.showFriendSeatedNotification(name, seatId);
+      }
+      _lastKnownFriendSeat[friendUid] = seatId;
+    });
+  }
+
+  /// 自分がチェックインしている座席を監視し、
+  /// ESP32のセンサーが離席を検知してcheckinsを削除した(=自分がその席に
+  /// いなくなった)ら、user_locationsも自動で片付け、放置リマインド通知も
+  /// キャンセルする。これが「離席したらQRチェックイン状態が自動でログアウトする」仕組み。
+  void _watchMyOwnCheckin() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    _myLocationSub = appDatabase.ref('user_locations/$uid').onValue.listen((event) {
+      final data = event.snapshot.value;
+      final seatId = data is Map ? data['seatId'] as String? : null;
+
+      if (seatId == _myWatchedSeatId) return;
+
+      // 監視対象の座席が変わったので、古い方の監視は止める
+      _myCheckinSub?.cancel();
+      _myCheckinSub = null;
+      _myWatchedSeatId = seatId;
+
+      if (seatId == null) return;
+
+      _myCheckinSub = appDatabase.ref('checkins/$seatId').onValue.listen((checkinEvent) {
+        final checkinData = checkinEvent.snapshot.value;
+        final checkinUid = checkinData is Map ? checkinData['uid'] as String? : null;
+
+        // checkins側が消えた(または別人になった) = ESP32が離席を検知した
+        if (checkinUid != uid) {
+          appDatabase.ref('user_locations/$uid').remove();
+          NotificationService.instance.cancel(seatId.hashCode & 0x7fffffff);
+        }
+      });
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,29 +233,14 @@ class HomePage extends StatelessWidget {
                       ),
                     ],
                   ),
-                  // プロフィールアイコン
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.5),
-                        width: 4,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      size: 32,
-                      color: Colors.grey,
-                    ),
+                  // プロフィールアイコン(タップでプロフィール画面へ)
+                  ProfileAvatar(
+                    size: 56,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ProfilePage()),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -172,57 +307,7 @@ class HomePage extends StatelessWidget {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(24),
-                          child: SingleChildScrollView(
-                            physics: const AlwaysScrollableScrollPhysics(
-                              parent: BouncingScrollPhysics(),
-                            ),
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              children: [
-                                // OIT梅田キャンパス（タップでフロア選択へ）
-                                _CampusCard(
-                                  name: 'OIT 梅田キャンパス',
-                                  subtitle: 'Umeda Campus',
-                                  isFavorite: true,
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      PageRouteBuilder(
-                                        transitionDuration: Duration.zero,
-                                        reverseTransitionDuration: Duration.zero,
-                                        pageBuilder: (_, __, ___) =>
-                                            const FloorSelectPage(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                const SizedBox(height: 12),
-                                _CampusCard(
-                                  name: 'OIT 枚方キャンパス',
-                                  subtitle: 'Hirakata Campus',
-                                ),
-                                const SizedBox(height: 12),
-                                _CampusCard(
-                                  name: 'OIT 大宮キャンパス',
-                                  subtitle: 'Omiya Campus',
-                                ),
-                                const SizedBox(height: 12),
-                                _CampusCard(
-                                  name: 'ユニバーサルスタジオジャパン',
-                                  subtitle: 'USJ',
-                                ),
-                                const SizedBox(height: 12),
-                                _CampusCard(
-                                  name: 'テストキャンパスA',
-                                  subtitle: 'Dummy A',
-                                ),
-                                const SizedBox(height: 12),
-                                _CampusCard(
-                                  name: 'テストキャンパスB',
-                                  subtitle: 'Dummy B',
-                                ),
-                              ],
-                            ),
-                          ),
+                          child: const _CampusListSection(),
                         ),
                       ),
                     ),
@@ -330,17 +415,222 @@ class _HeaderChip extends StatelessWidget {
   }
 }
 
+/// キャンパス1件分の固定データ。idはお気に入り保存時のキーとして使う。
+class _CampusInfo {
+  final String id;
+  final String name;
+  final String subtitle;
+
+  const _CampusInfo({required this.id, required this.name, required this.subtitle});
+}
+
+final List<_CampusInfo> _allCampuses = [
+  const _CampusInfo(id: 'umeda', name: 'OIT 梅田キャンパス', subtitle: 'Umeda Campus'),
+  const _CampusInfo(id: 'hirakata', name: 'OIT 枚方キャンパス', subtitle: 'Hirakata Campus'),
+  const _CampusInfo(id: 'omiya', name: 'OIT 大宮キャンパス', subtitle: 'Omiya Campus'),
+  // テスト用ダミーキャンパス(検索・スクロール動作確認用) A〜Z
+  for (int i = 0; i < 26; i++)
+    _CampusInfo(
+      id: 'test_${String.fromCharCode(65 + i)}',
+      name: 'テストキャンパス${String.fromCharCode(65 + i)}',
+      subtitle: 'Dummy ${String.fromCharCode(65 + i)}',
+    ),
+];
+
+/// キャンパス一覧を表示するセクション。
+/// お気に入り(★)は Realtime Database の `users/{uid}/favoriteCampuses` に
+/// 保存し、お気に入りにした項目が一覧の上位に来るよう並び替える。
+class _CampusListSection extends StatefulWidget {
+  const _CampusListSection();
+
+  @override
+  State<_CampusListSection> createState() => _CampusListSectionState();
+}
+
+class _CampusListSectionState extends State<_CampusListSection> with RouteAware {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  // お気に入りの並び順は、画面を開いた時点・他の画面から戻ってきた時点でのみ
+  // 確定させる(お気に入りボタンを押した瞬間には並び替えない)。
+  List<_CampusInfo>? _order;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() => _query = _searchController.text.trim());
+    });
+    _refreshOrder();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// 他の画面(座席詳細やチェックイン画面など)から戻ってきた時に呼ばれる。
+  /// ここで初めてお気に入りの並び順を更新する。
+  @override
+  void didPopNext() {
+    _refreshOrder();
+  }
+
+  Future<void> _refreshOrder() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final favoriteIds = <String>{};
+    if (uid != null) {
+      final snapshot = await appDatabase.ref('users/$uid/favoriteCampuses').get();
+      final data = snapshot.value;
+      if (data is Map) {
+        favoriteIds.addAll(data.keys.map((k) => k.toString()));
+      }
+    }
+    final sorted = [..._allCampuses]
+      ..sort((a, b) {
+        final aFav = favoriteIds.contains(a.id);
+        final bFav = favoriteIds.contains(b.id);
+        if (aFav == bFav) return 0;
+        return aFav ? -1 : 1;
+      });
+    if (mounted) {
+      setState(() => _order = sorted);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final order = _order ?? _allCampuses;
+    final query = _query.toLowerCase();
+    final visible = query.isEmpty
+        ? order
+        : order
+            .where((c) =>
+                c.name.toLowerCase().contains(query) ||
+                c.subtitle.toLowerCase().contains(query))
+            .toList();
+
+    return Column(
+      children: [
+        // 検索バー(名前・英語表記の部分一致で絞り込み)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                hintText: 'キャンパスを検索',
+                prefixIcon: Icon(Icons.search, color: Colors.grey),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: uid == null
+              ? _buildList(context, visible, const <String>{}, null)
+              : StreamBuilder<DatabaseEvent>(
+                  // 星の見た目(ON/OFF)はリアルタイムに反映するが、
+                  // 並び順(visible)はここでは変更しない。
+                  stream: appDatabase.ref('users/$uid/favoriteCampuses').onValue,
+                  builder: (context, snapshot) {
+                    final favData = snapshot.data?.snapshot.value;
+                    final favoriteIds = <String>{};
+                    if (favData is Map) {
+                      favoriteIds.addAll(favData.keys.map((k) => k.toString()));
+                    }
+                    return _buildList(context, visible, favoriteIds, uid);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildList(
+    BuildContext context,
+    List<_CampusInfo> items,
+    Set<String> favoriteIds,
+    String? uid,
+  ) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        children: [
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Text('見つかりませんでした', style: TextStyle(color: Colors.grey)),
+            ),
+          for (int i = 0; i < items.length; i++) ...[
+            _CampusCard(
+              name: items[i].name,
+              subtitle: items[i].subtitle,
+              isFavorite: favoriteIds.contains(items[i].id),
+              onFavoriteTap: uid == null
+                  ? null
+                  : () => _toggleFavorite(uid, items[i].id, favoriteIds.contains(items[i].id)),
+              onTap: items[i].id == 'umeda'
+                  ? () {
+                      Navigator.of(context).push(
+                        PageRouteBuilder(
+                          transitionDuration: Duration.zero,
+                          reverseTransitionDuration: Duration.zero,
+                          pageBuilder: (_, __, ___) => const FloorSelectPage(),
+                        ),
+                      );
+                    }
+                  : null,
+            ),
+            if (i != items.length - 1) const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleFavorite(String uid, String campusId, bool currentlyFavorite) async {
+    final ref = appDatabase.ref('users/$uid/favoriteCampuses/$campusId');
+    if (currentlyFavorite) {
+      await ref.remove();
+    } else {
+      await ref.set(true);
+    }
+  }
+}
+
+
 class _CampusCard extends StatelessWidget {
   final String name;
   final String subtitle;
   final bool isFavorite;
   final VoidCallback? onTap;
+  final VoidCallback? onFavoriteTap;
 
   const _CampusCard({
     required this.name,
     required this.subtitle,
     this.isFavorite = false,
     this.onTap,
+    this.onFavoriteTap,
   });
 
   @override
@@ -363,36 +653,51 @@ class _CampusCard extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            if (isFavorite)
-              const Positioned(
-                top: 0,
-                left: 0,
-                child: Text('★', style: TextStyle(color: Colors.amber, fontSize: 18)),
+            // お気に入りの星(常に表示。タップでON/OFF切り替え)
+            Positioned(
+              top: -4,
+              left: -4,
+              child: GestureDetector(
+                onTap: onFavoriteTap,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(
+                    isFavorite ? Icons.star : Icons.star_border,
+                    color: isFavorite ? Colors.amber : Colors.grey.shade400,
+                    size: 28,
+                  ),
+                ),
               ),
-            Column(
-              children: [
-                const Icon(Icons.business, color: Color(0xFF7AD961), size: 24),
-                const SizedBox(height: 6),
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                    color: Color(0xFF1A1C1C),
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: Column(
+                children: [
+                  const Icon(Icons.business, color: Color(0xFF7AD961), size: 24),
+                  const SizedBox(height: 6),
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                      color: Color(0xFF1A1C1C),
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 1.2,
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 1.2,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
@@ -600,6 +905,43 @@ class FloorSelectPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.mainGreen,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.95),
+            border: Border(top: BorderSide(color: Colors.grey.shade200)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _NavItem(
+                icon: Icons.home_outlined,
+                label: 'ホーム',
+                isActive: false,
+                onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
+              ),
+              _NavItem(
+                icon: Icons.people_outline,
+                label: 'フレンド',
+                isActive: false,
+                onTap: () => goToFriendScreen(context),
+              ),
+              _NavItem(
+                icon: Icons.qr_code_scanner,
+                label: 'QRコード',
+                isActive: false,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const CheckinPage()),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Center(
           child: Column(
@@ -879,22 +1221,7 @@ class _FloorMapPageState extends State<FloorMapPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            final seat = seats[seatIndex];
-            return SeatDetailSheet(
-              seat: seat,
-              onToggleOccupied: () {
-                setState(() {
-                  seat.isOccupied = !seat.isOccupied;
-                });
-                setSheetState(() {});
-              },
-            );
-          },
-        );
-      },
+      builder: (sheetContext) => SeatDetailSheet(seat: seats[seatIndex]),
     );
   }
 
@@ -1069,47 +1396,47 @@ class _FloorMapPageState extends State<FloorMapPage> {
 List<SeatInfo> _buildInitial6FSeats() {
   final List<SeatInfo> seats = [];
 
-  // 左側の個人学習席（7席・ESP32センサー対応、seat_01〜seat_07）
+  // 左側のグループ席（7席・ESP32センサーで実際に管理、seat_01〜seat_07）
+  // 最大4人まで利用可能なグループ席。
   for (int i = 1; i <= 7; i++) {
     seats.add(SeatInfo(
-      name: '個人学習席 $i',
+      name: 'グループ席 A-$i',
       amenities: i % 2 == 0 ? ['窓際', '電源'] : ['電源'],
-      capacity: 1,
-      isOccupied: (i * 4 + 3) % 7 == 0 || (i * 4 + 4) % 9 == 0,
+      capacity: 4,
+      isOccupied: false, // センサーが反応するまでは空席として表示する
     ));
   }
 
-  // 中央のグループ席テーブル（5行 x 7列 = 35席）
+  // 中央のグループ席テーブル（5行 x 7列 = 35席）。最大2人まで利用可能。
   for (int r = 1; r <= 5; r++) {
     for (int c = 1; c <= 7; c++) {
-      final idx = (r - 1) * 7 + c;
       seats.add(SeatInfo(
-        name: 'グループ席 $r-$c',
+        name: 'グループ席 B-$r-$c',
         amenities: const ['グループ利用可'],
-        capacity: 1,
-        isOccupied: (idx * 2 + 3) % 7 == 0 || (idx * 2 + 4) % 9 == 0,
+        capacity: 2,
+        isOccupied: false,
       ));
     }
   }
 
-  // 個人学習ソファー（4席）
+  // 右側の個人学習席（4席）。1人用。
   for (int i = 1; i <= 4; i++) {
     seats.add(SeatInfo(
-      name: '個人学習ソファー $i',
+      name: '個人学習席 $i',
       amenities: const ['ソファ席', '電源'],
       capacity: 1,
-      isOccupied: (i * 5 + 3) % 7 == 0 || (i * 5 + 4) % 9 == 0,
+      isOccupied: false,
     ));
   }
 
-  // グリッド下の個人学習テーブル(2卓)。
-  // 見た目上は3区画ずつの横長テーブルだが、3つで1つのテーブル(1席)として扱う。
+  // グリッド下のグループ席(2卓)。最大10人程度まで利用可能な大型テーブル。
+  // 見た目上は3区画ずつの横長テーブルだが、3つで1つの席として扱う。
   for (int i = 1; i <= 2; i++) {
     seats.add(SeatInfo(
-      name: '個人学習テーブル $i',
-      amenities: const ['学習席'],
-      capacity: 3,
-      isOccupied: (i * 3 + 2) % 7 == 0 || (i * 3 + 5) % 9 == 0,
+      name: 'グループ席 C-$i',
+      amenities: const ['大人数向け'],
+      capacity: 10,
+      isOccupied: false,
     ));
   }
 
@@ -1967,12 +2294,10 @@ class _KamadoSection extends StatelessWidget {
 /// =========================================================
 class SeatDetailSheet extends StatelessWidget {
   final SeatInfo seat;
-  final VoidCallback onToggleOccupied;
 
   const SeatDetailSheet({
     super.key,
     required this.seat,
-    required this.onToggleOccupied,
   });
 
   @override
@@ -2044,36 +2369,7 @@ class SeatDetailSheet extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            if (seat.isOccupied)
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey.shade100,
-                  foregroundColor: Colors.grey.shade800,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  elevation: 0,
-                ),
-                onPressed: null,
-                icon: const Icon(Icons.block),
-                label: const Text(
-                  '現在アプリからは操作できません',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              )
-            else
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.mainGreen,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: onToggleOccupied,
-                icon: const Icon(Icons.check),
-                label: const Text(
-                  'この席を利用する',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
+            const SizedBox(height: 4),
           ],
         ),
       ),
@@ -2182,20 +2478,92 @@ class _FloorDrawerState extends State<FloorDrawer> {
   }
 }
 
-/// ドロワー：1階層目「フロア選択」「使い方」
+/// ドロワー：1階層目「フロア選択」「使い方」など
 class _DrawerMenuList extends StatelessWidget {
   final VoidCallback onFloorSelectTap;
 
   const _DrawerMenuList({super.key, required this.onFloorSelectTap});
 
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ログアウトしますか?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('ログアウト'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await AuthService().signOut();
+      // ログアウトするとFirebaseの認証状態が変わり、main.dartのAuthGateが
+      // 自動的にLoginPageへ切り替えてくれるので、ここで手動遷移する必要はない。
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return ListView(
+      padding: EdgeInsets.zero,
       children: [
         _DrawerItem(label: 'フロア選択', onTap: onFloorSelectTap),
         const Divider(height: 1, color: AppColors.mainGreen),
-        _DrawerItem(label: '使い方', onTap: () {}),
+        _DrawerItem(
+          label: '使い方',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const HowToUsePage()),
+            );
+          },
+        ),
+        const Divider(height: 1, color: AppColors.mainGreen),
+        _DrawerItem(
+          label: 'プロフィール',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProfilePage()),
+            );
+          },
+        ),
+        const Divider(height: 1, color: AppColors.mainGreen),
+        _DrawerItem(
+          label: 'アプリについて',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AboutPage()),
+            );
+          },
+        ),
+        const Divider(height: 1, color: AppColors.mainGreen),
+        _DrawerItem(
+          label: 'フィードバック',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const FeedbackPage()),
+            );
+          },
+        ),
+        const Divider(height: 1, color: AppColors.mainGreen),
+        _DrawerItem(
+          label: '利用規約・プライバシーポリシー',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const TermsPage()),
+            );
+          },
+        ),
+        const Divider(height: 1, color: AppColors.mainGreen),
+        _DrawerItem(
+          label: 'ログアウト',
+          onTap: () => _confirmLogout(context),
+        ),
       ],
     );
   }

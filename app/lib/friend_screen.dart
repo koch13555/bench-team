@@ -35,7 +35,10 @@ class _FriendScreenState extends State<FriendScreen> {
     final myUid = FirebaseAuth.instance.currentUser!.uid;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('フレンド')),
+      appBar: AppBar(
+        title: const Text('フレンド'),
+        automaticallyImplyLeading: false, // 戻る矢印を非表示にし、下部ナビに統一
+      ),
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
