@@ -29,7 +29,14 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  await initializeSeats(); // ← 追加
+  // 権限エラー(セキュリティルールでログイン必須にした場合など)が起きても
+  // アプリ全体がクラッシュしてrunApp()が呼ばれなくなるのを防ぐ。
+  // (座席データは既に存在しているはずなので、ここで失敗しても実害はない)
+  try {
+    await initializeSeats();
+  } catch (e) {
+    debugPrint('initializeSeatsをスキップしました: $e');
+  }
   runApp(const MyApp());
 }
 
@@ -39,7 +46,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '座席管理システム',
+      title: 'すわほ',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),

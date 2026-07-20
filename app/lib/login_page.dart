@@ -116,7 +116,7 @@ class _LoginPageState extends State<LoginPage> {
                 const Icon(Icons.event_seat, size: 56, color: Colors.white),
                 const SizedBox(height: 12),
                 const Text(
-                  '座席管理システム',
+                  'すわほ',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
