@@ -148,6 +148,12 @@ class AuthService {
     );
   }
 
+  /// パスワード再設定メールを送信する。
+  /// 届いたメール内のリンクから、本人がパスワードを再設定できる。
+  Future<void> sendPasswordResetEmail(String email) {
+    return _auth.sendPasswordResetEmail(email: email.trim());
+  }
+
   /// メールアドレス + パスワードで新規登録し、表示名(displayName)も設定する
   Future<UserCredential> registerWithEmail({
     required String email,

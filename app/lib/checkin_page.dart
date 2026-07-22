@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'seat_checkin_service.dart';
 import 'qr_scanner_page.dart';
 import 'seat_widget.dart'; // goToFriendScreen()を使うため
+import 'app_localizations.dart';
 
 /// 座席チェックインの入り口画面。
 /// - QRコードをスキャンしてチェックイン
@@ -23,14 +24,14 @@ class _CheckinPageState extends State<CheckinPage> {
     final rawValue = await Navigator.push<String>(
       context,
       MaterialPageRoute(
-        builder: (_) => const QrScannerPage(title: '座席のQRコードを枠内に合わせてください'),
+        builder: (_) => QrScannerPage(title: AppStrings.t('checkin_scan_hint')),
       ),
     );
     if (rawValue == null) return;
 
     final seatId = SeatCheckinService.parseCheckinQr(rawValue);
     if (seatId == null) {
-      _showMessage('座席用のQRコードではないようです');
+      _showMessage(AppStrings.t('not_qr_seat'));
       return;
     }
     await _checkIn(seatId);
@@ -46,40 +47,43 @@ class _CheckinPageState extends State<CheckinPage> {
   }
 
   Future<void> _checkIn(String seatId) async {
-    // チェックインする前に、今この席に誰か座っていないか確認する
-    final occupant = await _service.getCurrentOccupant(seatId);
+    // 今この席に何人いるか確認する(グループ席は複数人が同時にチェックインできる)
+    final occupants = await _service.getCurrentOccupants(seatId);
     final myUid = FirebaseAuth.instance.currentUser?.uid;
-    if (occupant != null && occupant.uid != myUid) {
-      final proceed = await _confirmOccupiedSeat(occupant.displayName);
+    final others = occupants.where((o) => o.uid != myUid).toList();
+
+    if (others.isNotEmpty) {
+      final proceed = await _confirmJoinSeat(others.map((o) => o.displayName).toList());
       if (proceed != true) return;
     }
 
     setState(() => _isLoading = true);
     try {
       await _service.checkIn(seatId: seatId);
-      _showMessage('$seatId にチェックインしました');
+      _showMessage('$seatId ${AppStrings.t('checkin_success')}');
     } catch (e) {
-      _showMessage('チェックインに失敗しました: $e');
+      _showMessage('${AppStrings.t('checkin_fail')}: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  /// 「現在〇〇さんが座っています。それでもチェックインしますか?」の確認ダイアログ
-  Future<bool?> _confirmOccupiedSeat(String occupantName) {
+  /// 「現在〇〇さんたちが利用中です。一緒にチェックインしますか?」の確認ダイアログ
+  /// (満席の場合は、この後 checkIn() 側でエラーメッセージが表示される)
+  Future<bool?> _confirmJoinSeat(List<String> occupantNames) {
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('この席は使用中です'),
-        content: Text('現在「$occupantName」さんが座っています。\nそれでもチェックインしますか?'),
+        title: Text(AppStrings.t('checkin_join_title')),
+        content: Text('${AppStrings.t('checkin_join_body_prefix')}${occupantNames.join('、')}${AppStrings.t('checkin_join_body_suffix')}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('キャンセル'),
+            child: Text(AppStrings.t('cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('チェックインする'),
+            child: Text(AppStrings.t('checkin_button')),
           ),
         ],
       ),
@@ -96,7 +100,7 @@ class _CheckinPageState extends State<CheckinPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('座席にチェックイン'),
+        title: Text(AppStrings.t('checkin_title')),
         backgroundColor: Colors.white,
         automaticallyImplyLeading: false, // ← 戻る矢印を非表示にし、下部ナビに統一
       ),
@@ -113,19 +117,19 @@ class _CheckinPageState extends State<CheckinPage> {
             children: [
               _NavItem(
                 icon: Icons.home_outlined,
-                label: 'ホーム',
+                label: AppStrings.t('nav_home'),
                 isActive: false,
                 onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
               ),
               _NavItem(
                 icon: Icons.people_outline,
-                label: 'フレンド',
+                label: AppStrings.t('nav_friend'),
                 isActive: false,
                 onTap: () => goToFriendScreen(context),
               ),
               _NavItem(
                 icon: Icons.qr_code_scanner,
-                label: 'QRコード',
+                label: AppStrings.t('nav_qr'),
                 isActive: true, // 現在この画面にいるのでハイライト
                 onTap: null,
               ),
@@ -147,14 +151,14 @@ class _CheckinPageState extends State<CheckinPage> {
                       width: double.infinity,
                       child: FilledButton.icon(
                         icon: const Icon(Icons.qr_code_scanner),
-                        label: const Text('QRコードをスキャン'),
+                        label: Text(AppStrings.t('checkin_scan_qr')),
                         onPressed: _scanAndCheckIn,
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextButton(
                       onPressed: _manualCheckIn,
-                      child: const Text('座席番号を直接入力する'),
+                      child: Text(AppStrings.t('checkin_manual_entry')),
                     ),
                   ],
                 ),
@@ -184,23 +188,23 @@ class _ManualSeatIdDialogState extends State<_ManualSeatIdDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('座席番号を入力'),
+      title: Text(AppStrings.t('checkin_manual_dialog_title')),
       content: TextField(
         controller: _controller,
         autofocus: true,
-        decoration: const InputDecoration(
-          hintText: '例: seat_01',
+        decoration: InputDecoration(
+          hintText: AppStrings.t('checkin_manual_hint'),
           border: OutlineInputBorder(),
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('キャンセル'),
+          child: Text(AppStrings.t('cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
-          child: const Text('チェックイン'),
+          child: Text(AppStrings.t('checkin_button')),
         ),
       ],
     );

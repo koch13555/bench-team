@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_localizations.dart';
 
 /// 「アプリについて」画面。バージョン情報とチームメンバーのクレジットを表示する。
 class AboutPage extends StatelessWidget {
@@ -18,32 +19,32 @@ class AboutPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('アプリについて')),
+      appBar: AppBar(title: Text(AppStrings.t('about_title'))),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
           const Icon(Icons.event_seat, size: 64, color: Color(0xFF106E00)),
           const SizedBox(height: 12),
-          const Center(
+          Center(
             child: Text(
-              'すわほ',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              AppStrings.t('app_title'),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(height: 4),
           Center(
             child: Text(
-              'バージョン $appVersion',
+              '${AppStrings.t('about_version_prefix')} $appVersion',
               style: const TextStyle(color: Colors.grey),
             ),
           ),
           const SizedBox(height: 32),
-          const Text(
-            '座席の空き状況をリアルタイムに確認できる、大学構内向けの座席管理アプリです。',
-            style: TextStyle(height: 1.5),
+          Text(
+            AppStrings.t('about_description'),
+            style: const TextStyle(height: 1.5),
           ),
           const SizedBox(height: 32),
-          const Text('開発チーム', style: TextStyle(fontWeight: FontWeight.bold)),
+          Text(AppStrings.t('about_team_heading'), style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(

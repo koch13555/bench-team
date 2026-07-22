@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'app_localizations.dart';
 
 /// アプリを初めて開いた時だけ表示するチュートリアル画面。
 /// 一度見たら、次回以降は表示しない(端末内にフラグを保存する)。
@@ -37,26 +38,26 @@ class _OnboardingSlide {
   });
 }
 
-const List<_OnboardingSlide> _slides = [
+List<_OnboardingSlide> _buildSlides() => [
   _OnboardingSlide(
     icon: Icons.event_seat,
-    title: '座席の空き状況が一目で分かる',
-    description: 'キャンパスのフロアマップ上で、どの座席が空いているか\nリアルタイムに確認できます。',
+    title: AppStrings.t('onboarding_title_1'),
+    description: AppStrings.t('onboarding_desc_1'),
   ),
   _OnboardingSlide(
     icon: Icons.qr_code_scanner,
-    title: 'QRコードでサクッとチェックイン',
-    description: 'テーブルのQRコードを読み取るだけで、\n座席にチェックインできます。',
+    title: AppStrings.t('onboarding_title_2'),
+    description: AppStrings.t('onboarding_desc_2'),
   ),
   _OnboardingSlide(
     icon: Icons.people_outline,
-    title: 'フレンドの居場所も分かる',
-    description: 'フレンドを追加すると、お互いが\n今どの座席にいるかを確認できます。',
+    title: AppStrings.t('onboarding_title_3'),
+    description: AppStrings.t('onboarding_desc_3'),
   ),
   _OnboardingSlide(
     icon: Icons.warning_amber,
-    title: '災害時にも役立ちます',
-    description: '災害用モードでは、かまどベンチの場所や\n使い方をすぐに確認できます。',
+    title: AppStrings.t('onboarding_title_4'),
+    description: AppStrings.t('onboarding_desc_4'),
   ),
 ];
 
@@ -77,7 +78,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isLast = _currentPage == _slides.length - 1;
+    final slides = _buildSlides();
+    final isLast = _currentPage == slides.length - 1;
 
     return Scaffold(
       backgroundColor: const Color(0xFF8DF172),
@@ -88,16 +90,16 @@ class _OnboardingPageState extends State<OnboardingPage> {
               alignment: Alignment.topRight,
               child: TextButton(
                 onPressed: _finish,
-                child: const Text('スキップ', style: TextStyle(color: Colors.white)),
+                child: Text(AppStrings.t('onboarding_skip'), style: const TextStyle(color: Colors.white)),
               ),
             ),
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
-                itemCount: _slides.length,
+                itemCount: slides.length,
                 onPageChanged: (i) => setState(() => _currentPage = i),
                 itemBuilder: (context, index) {
-                  final slide = _slides[index];
+                  final slide = slides[index];
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: Column(
@@ -138,7 +140,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                for (int i = 0; i < _slides.length; i++)
+                for (int i = 0; i < slides.length; i++)
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -168,7 +170,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     foregroundColor: const Color(0xFF106E00),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: Text(isLast ? '始める' : '次へ'),
+                  child: Text(isLast ? AppStrings.t('onboarding_start') : AppStrings.t('onboarding_next')),
                 ),
               ),
             ),

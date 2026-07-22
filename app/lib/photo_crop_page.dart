@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'app_localizations.dart';
 
 /// 選択した写真を、ピンチズーム・ドラッグで好きな位置に調整してから
 /// 円形に切り抜くための画面。
@@ -55,7 +56,7 @@ class _PhotoCropPageState extends State<PhotoCropPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('切り抜きに失敗しました: $e')),
+          SnackBar(content: Text('${AppStrings.t('crop_failed')}: $e')),
         );
       }
     } finally {
@@ -70,7 +71,7 @@ class _PhotoCropPageState extends State<PhotoCropPage> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('写真の位置を調整'),
+        title: Text(AppStrings.t('crop_title')),
         actions: [
           TextButton(
             onPressed: _isSaving ? null : _confirm,
@@ -80,9 +81,9 @@ class _PhotoCropPageState extends State<PhotoCropPage> {
                     height: 20,
                     child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                   )
-                : const Text(
-                    '決定',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                : Text(
+                    AppStrings.t('crop_confirm'),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                   ),
           ),
         ],
@@ -90,9 +91,9 @@ class _PhotoCropPageState extends State<PhotoCropPage> {
       body: Column(
         children: [
           const SizedBox(height: 24),
-          const Text(
-            'ピンチで拡大縮小、ドラッグで位置を調整できます',
-            style: TextStyle(color: Colors.white70, fontSize: 13),
+          Text(
+            AppStrings.t('crop_instructions'),
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
           const SizedBox(height: 24),
           Expanded(

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'firebase_db.dart';
+import 'app_localizations.dart';
 
 /// フィードバック(不具合報告・要望)を送信する画面。
 /// 送信内容は Realtime Database の `feedback/{自動生成ID}` に保存する。
@@ -27,7 +28,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
     final text = _controller.text.trim();
     if (text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('内容を入力してください')),
+        SnackBar(content: Text(AppStrings.t('feedback_empty_error'))),
       );
       return;
     }
@@ -45,14 +46,14 @@ class _FeedbackPageState extends State<FeedbackPage> {
       if (mounted) {
         _controller.clear();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('送信しました。ありがとうございます!')),
+          SnackBar(content: Text(AppStrings.t('feedback_sent'))),
         );
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('送信に失敗しました: $e')),
+          SnackBar(content: Text('${AppStrings.t('feedback_send_failed')}: $e')),
         );
       }
     } finally {
@@ -63,23 +64,23 @@ class _FeedbackPageState extends State<FeedbackPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('フィードバック')),
+      appBar: AppBar(title: Text(AppStrings.t('feedback_title'))),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              '不具合の報告や「こんな機能が欲しい」というご意見をお寄せください。',
-              style: TextStyle(color: Colors.grey, height: 1.4),
+            Text(
+              AppStrings.t('feedback_description'),
+              style: const TextStyle(color: Colors.grey, height: 1.4),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _controller,
               maxLines: 8,
-              decoration: const InputDecoration(
-                hintText: '内容を入力してください',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: AppStrings.t('feedback_hint'),
+                border: const OutlineInputBorder(),
                 alignLabelWithHint: true,
               ),
             ),
@@ -97,7 +98,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : const Text('送信する'),
+                  : Text(AppStrings.t('feedback_send')),
             ),
           ],
         ),

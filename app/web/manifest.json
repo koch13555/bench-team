@@ -1,11 +1,11 @@
 {
-    "name": "app",
-    "short_name": "app",
+    "name": "すわほ",
+    "short_name": "すわほ",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#8DF172",
+    "theme_color": "#8DF172",
+    "description": "座席の空き状況をリアルタイムに確認できるアプリ「すわほ」",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

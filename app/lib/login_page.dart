@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
 import 'google_signin_button.dart';
+import 'app_localizations.dart';
 
 /// アプリ初回起動時に表示するログイン画面。
 /// Google / Apple / メールアドレスでのログイン・新規登録に対応。
@@ -75,6 +76,29 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _handleGuest() => _run(_authService.signInAsGuest);
 
+  /// メールアドレスを入力してもらい、パスワード再設定メールを送る
+  Future<void> _handleForgotPassword() async {
+    final email = await showDialog<String>(
+      context: context,
+      builder: (context) => _ForgotPasswordDialog(initialEmail: _emailController.text),
+    );
+    if (email == null || email.isEmpty) return;
+
+    try {
+      await _authService.sendPasswordResetEmail(email);
+      _showMessage('$email 宛にパスワード再設定メールを送信しました');
+    } catch (e) {
+      _showError('メールの送信に失敗しました: $e');
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: const Color(0xFF106E00)),
+    );
+  }
+
   Future<void> _handleEmailSubmit() {
     final email = _emailController.text;
     final password = _passwordController.text;
@@ -115,9 +139,9 @@ class _LoginPageState extends State<LoginPage> {
               children: [
                 const Icon(Icons.event_seat, size: 56, color: Colors.white),
                 const SizedBox(height: 12),
-                const Text(
-                  'すわほ',
-                  style: TextStyle(
+                Text(
+                  AppStrings.t('app_title'),
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -132,20 +156,20 @@ class _LoginPageState extends State<LoginPage> {
                   if (_showAppleButton) ...[
                     const SizedBox(height: 12),
                     _SocialButton(
-                      label: 'Appleでログイン',
+                      label: AppStrings.t('login_apple'),
                       icon: Icons.apple,
                       onTap: _handleApple,
                     ),
                   ],
                   const SizedBox(height: 24),
                   Row(
-                    children: const [
-                      Expanded(child: Divider(color: Colors.white54)),
+                    children: [
+                      const Expanded(child: Divider(color: Colors.white54)),
                       Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('または', style: TextStyle(color: Colors.white)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(AppStrings.t('or_divider'), style: const TextStyle(color: Colors.white)),
                       ),
-                      Expanded(child: Divider(color: Colors.white54)),
+                      const Expanded(child: Divider(color: Colors.white54)),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -160,9 +184,9 @@ class _LoginPageState extends State<LoginPage> {
                         if (_isRegisterMode) ...[
                           TextField(
                             controller: _nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'お名前',
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              labelText: AppStrings.t('label_name'),
+                              border: const OutlineInputBorder(),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -170,18 +194,18 @@ class _LoginPageState extends State<LoginPage> {
                         TextField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(
-                            labelText: 'メールアドレス',
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            labelText: AppStrings.t('label_email'),
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _passwordController,
                           obscureText: true,
-                          decoration: const InputDecoration(
-                            labelText: 'パスワード',
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            labelText: AppStrings.t('label_password'),
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -194,7 +218,7 @@ class _LoginPageState extends State<LoginPage> {
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
-                            child: Text(_isRegisterMode ? '新規登録' : 'ログイン'),
+                            child: Text(_isRegisterMode ? AppStrings.t('button_register') : AppStrings.t('button_login')),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -204,16 +228,21 @@ class _LoginPageState extends State<LoginPage> {
                           },
                           child: Text(
                             _isRegisterMode
-                                ? 'すでにアカウントをお持ちの方はこちら'
-                                : 'はじめての方はこちら(新規登録)',
+                                ? AppStrings.t('switch_to_login')
+                                : AppStrings.t('switch_to_register'),
                           ),
                         ),
+                        if (!_isRegisterMode)
+                          TextButton(
+                            onPressed: _handleForgotPassword,
+                            child: Text(AppStrings.t('forgot_password')),
+                          ),
                         const SizedBox(height: 4),
                         TextButton(
                           onPressed: _handleGuest,
-                          child: const Text(
-                            'ゲストとして利用する(フレンド機能は使えません)',
-                            style: TextStyle(color: Colors.grey),
+                          child: Text(
+                            AppStrings.t('guest_login'),
+                            style: const TextStyle(color: Colors.grey),
                           ),
                         ),
                       ],
@@ -253,6 +282,63 @@ class _SocialButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 14),
         ),
       ),
+    );
+  }
+}
+
+/// パスワード再設定用のメールアドレス入力ダイアログ
+class _ForgotPasswordDialog extends StatefulWidget {
+  final String initialEmail;
+
+  const _ForgotPasswordDialog({required this.initialEmail});
+
+  @override
+  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  late final _controller = TextEditingController(text: widget.initialEmail);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('パスワードを再設定'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '登録済みのメールアドレスを入力してください。\n再設定用のリンクを記載したメールをお送りします。',
+            style: TextStyle(fontSize: 13, color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(
+              labelText: AppStrings.t('label_email'),
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('送信'),
+        ),
+      ],
     );
   }
 }

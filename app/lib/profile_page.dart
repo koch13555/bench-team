@@ -8,6 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import 'firebase_db.dart';
 import 'photo_crop_page.dart';
 import 'profile_avatar.dart';
+import 'app_localizations.dart';
+import 'settings_page.dart';
 
 /// プロフィール画面。
 /// 写真は選択後にその場でリサイズ・圧縮してbase64文字列にし、
@@ -68,9 +70,9 @@ class _ProfilePageState extends State<ProfilePage> {
       }
       await appDatabase.ref('users/$uid/photoBase64').set(base64Str);
 
-      _showMessage('プロフィール写真を更新しました');
+      _showMessage(AppStrings.t('profile_updated'));
     } catch (e) {
-      _showMessage('写真の更新に失敗しました: $e');
+      _showMessage('${AppStrings.t('profile_update_failed')}: $e');
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -83,9 +85,9 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _isUploading = true);
     try {
       await appDatabase.ref('users/$uid/photoBase64').remove();
-      _showMessage('写真を削除しました');
+      _showMessage(AppStrings.t('profile_removed'));
     } catch (e) {
-      _showMessage('削除に失敗しました: $e');
+      _showMessage('${AppStrings.t('profile_remove_failed')}: $e');
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -103,7 +105,18 @@ class _ProfilePageState extends State<ProfilePage> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF8DF172),
         foregroundColor: Colors.white,
-        title: const Text('プロフィール'),
+        title: Text(AppStrings.t('profile_title')),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: AppStrings.t('drawer_settings'),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SettingsPage()),
+              );
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -123,7 +136,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: ElevatedButton.icon(
                   onPressed: _isUploading ? null : _pickAndUpload,
                   icon: const Icon(Icons.photo_library),
-                  label: const Text('写真を選択'),
+                  label: Text(AppStrings.t('profile_pick_photo')),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black87,
@@ -134,9 +147,9 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 8),
               TextButton(
                 onPressed: _isUploading ? null : _removePhoto,
-                child: const Text(
-                  '写真を削除する',
-                  style: TextStyle(color: Colors.white),
+                child: Text(
+                  AppStrings.t('profile_remove_photo'),
+                  style: const TextStyle(color: Colors.white),
                 ),
               ),
               const SizedBox(height: 32),
@@ -150,9 +163,9 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '名前',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    Text(
+                      AppStrings.t('profile_name_label'),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                     const SizedBox(height: 4),
                     Text(

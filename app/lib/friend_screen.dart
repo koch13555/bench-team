@@ -4,6 +4,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'friend_service.dart';
 import 'qr_scanner_page.dart';
 import 'checkin_page.dart';
+import 'app_localizations.dart';
 
 /// 自分のQRコード表示・相手のQR読み取り・フレンド申請一覧・
 /// フレンドが今どの座席にいるかの表示を扱う画面
@@ -35,10 +36,7 @@ class _FriendScreenState extends State<FriendScreen> {
     final myUid = FirebaseAuth.instance.currentUser!.uid;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('フレンド'),
-        automaticallyImplyLeading: false, // 戻る矢印を非表示にし、下部ナビに統一
-      ),
+      appBar: AppBar(title: Text(AppStrings.t('friend_title'))),
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
@@ -52,19 +50,19 @@ class _FriendScreenState extends State<FriendScreen> {
             children: [
               _NavItem(
                 icon: Icons.home_outlined,
-                label: 'ホーム',
+                label: AppStrings.t('nav_home'),
                 isActive: false,
                 onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
               ),
               _NavItem(
                 icon: Icons.people_outline,
-                label: 'フレンド',
+                label: AppStrings.t('nav_friend'),
                 isActive: true, // 現在この画面にいるのでハイライト
                 onTap: null,
               ),
               _NavItem(
                 icon: Icons.qr_code_scanner,
-                label: 'QRコード',
+                label: AppStrings.t('nav_qr'),
                 isActive: false,
                 onTap: () {
                   Navigator.of(context).push(
@@ -83,7 +81,7 @@ class _FriendScreenState extends State<FriendScreen> {
           children: [
             Column(
               children: [
-                const Text('自分のQRコード(相手に読み取ってもらう)'),
+                Text(AppStrings.t('friend_my_qr')),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -106,25 +104,25 @@ class _FriendScreenState extends State<FriendScreen> {
             const SizedBox(height: 24),
             FilledButton.icon(
               icon: const Icon(Icons.qr_code_scanner),
-              label: const Text('QRコードを読み取ってフレンド申請'),
+              label: Text(AppStrings.t('friend_scan_button')),
               onPressed: () => _openScanner(context),
             ),
             const SizedBox(height: 24),
-            const Text('届いているフレンド申請', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(AppStrings.t('friend_incoming_requests'), style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             StreamBuilder<List<FriendRequest>>(
               stream: _friendService.incomingRequests(),
               builder: (context, snapshot) {
                 final requests = snapshot.data ?? [];
                 if (requests.isEmpty) {
-                  return const Text('現在届いている申請はありません');
+                  return Text(AppStrings.t('friend_no_requests'));
                 }
                 return Column(
                   children: requests.map((r) {
                     return Card(
                       child: ListTile(
                         title: Text(r.fromName),
-                        subtitle: const Text('フレンド申請が届いています'),
+                        subtitle: Text(AppStrings.t('friend_request_received')),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -148,7 +146,7 @@ class _FriendScreenState extends State<FriendScreen> {
               },
             ),
             const SizedBox(height: 24),
-            const Text('フレンドの現在地', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(AppStrings.t('friend_locations'), style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             FutureBuilder<List<FriendStatus>>(
               future: _friendsFuture,
@@ -161,7 +159,7 @@ class _FriendScreenState extends State<FriendScreen> {
                 }
                 final friends = snapshot.data ?? [];
                 if (friends.isEmpty) {
-                  return const Text('まだフレンドがいません');
+                  return Text(AppStrings.t('friend_none_yet'));
                 }
                 return Column(
                   children: friends.map((f) {
@@ -174,7 +172,7 @@ class _FriendScreenState extends State<FriendScreen> {
                         ),
                         title: Text(f.name),
                         subtitle: Text(
-                          isSeated ? '${f.seatId} に着席中' : '現在チェックインしていません',
+                          isSeated ? '${f.seatId} ${AppStrings.t('friend_seated_at')}' : AppStrings.t('friend_not_checked_in'),
                         ),
                       ),
                     );
@@ -192,7 +190,7 @@ class _FriendScreenState extends State<FriendScreen> {
     final rawValue = await Navigator.push<String>(
       context,
       MaterialPageRoute(
-        builder: (_) => const QrScannerPage(title: 'フレンドのQRコードを読み取ってください'),
+        builder: (_) => QrScannerPage(title: AppStrings.t('friend_scan_hint')),
       ),
     );
     if (rawValue == null) return;
@@ -202,7 +200,7 @@ class _FriendScreenState extends State<FriendScreen> {
     if (uri == null || uri.host != 'addfriend' || scannedUid == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('フレンド追加用のQRコードではないようです')),
+          SnackBar(content: Text(AppStrings.t('friend_not_add_qr'))),
         );
       }
       return;
@@ -212,13 +210,13 @@ class _FriendScreenState extends State<FriendScreen> {
       await _friendService.sendFriendRequest(scannedUid);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('フレンド申請を送りました')),
+          SnackBar(content: Text(AppStrings.t('friend_request_sent'))),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('申請に失敗しました: $e')),
+          SnackBar(content: Text('${AppStrings.t('friend_request_fail')}: $e')),
         );
       }
     }

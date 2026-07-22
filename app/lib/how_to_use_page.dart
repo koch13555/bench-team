@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_localizations.dart';
 
 /// 「使い方」画面。アプリの主な機能を簡単に説明する。
 class HowToUsePage extends StatelessWidget {
@@ -7,56 +8,56 @@ class HowToUsePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('使い方')),
+      appBar: AppBar(title: Text(AppStrings.t('howto_title'))),
       body: ListView(
         padding: const EdgeInsets.all(20),
-        children: const [
+        children: [
           _HowToSection(
             icon: Icons.event_seat,
-            title: '座席の空き状況を確認する',
+            title: AppStrings.t('howto_1_title'),
             steps: [
-              'ホーム画面でキャンパスを選び、フロア(6F/9F)を選択します。',
-              '座席をタップすると、詳細(空席/使用中、電源の有無など)が確認できます。',
-              '青(空席)・赤(使用中)の色で一目で分かります。',
+              AppStrings.t('howto_1_step1'),
+              AppStrings.t('howto_1_step2'),
+              AppStrings.t('howto_1_step3'),
             ],
           ),
-          SizedBox(height: 24),
+          const SizedBox(height: 24),
           _HowToSection(
             icon: Icons.qr_code_scanner,
-            title: 'QRコードでチェックインする',
+            title: AppStrings.t('howto_2_title'),
             steps: [
-              '下部ナビの「QRコード」をタップします。',
-              'テーブルに設置されたQRコードを読み取ると、その場でチェックインできます。',
-              'QRが読み取れない場合は「座席番号を直接入力する」からでもチェックインできます。',
+              AppStrings.t('howto_2_step1'),
+              AppStrings.t('howto_2_step2'),
+              AppStrings.t('howto_2_step3'),
             ],
           ),
-          SizedBox(height: 24),
+          const SizedBox(height: 24),
           _HowToSection(
             icon: Icons.people_outline,
-            title: 'フレンドを追加する',
+            title: AppStrings.t('howto_3_title'),
             steps: [
-              '下部ナビの「フレンド」から、自分のQRコードを表示できます。',
-              '友達に読み取ってもらう(または友達のQRを読み取る)とフレンド申請が届きます。',
-              '申請を承認すると、フレンドが今どの座席にいるかが分かるようになります。',
+              AppStrings.t('howto_3_step1'),
+              AppStrings.t('howto_3_step2'),
+              AppStrings.t('howto_3_step3'),
             ],
           ),
-          SizedBox(height: 24),
+          const SizedBox(height: 24),
           _HowToSection(
             icon: Icons.star_border,
-            title: 'キャンパスをお気に入り登録する',
+            title: AppStrings.t('howto_4_title'),
             steps: [
-              'ホーム画面のキャンパスカード左上の☆をタップすると★になります。',
-              'お気に入りにしたキャンパスは、次にアプリを開いた時に一覧の上位に表示されます。',
+              AppStrings.t('howto_4_step1'),
+              AppStrings.t('howto_4_step2'),
             ],
           ),
-          SizedBox(height: 24),
+          const SizedBox(height: 24),
           _HowToSection(
             icon: Icons.warning_amber,
-            title: '災害用モード',
+            title: AppStrings.t('howto_5_title'),
             steps: [
-              'フロアマップ画面右上の⚠️アイコンで切り替えられます。',
-              'ONにすると、災害時に「かまどベンチ」として使える座席がオレンジ色で表示されます。',
-              'タップすると使い方(組み立て方・注意事項)を確認できます。',
+              AppStrings.t('howto_5_step1'),
+              AppStrings.t('howto_5_step2'),
+              AppStrings.t('howto_5_step3'),
             ],
           ),
         ],

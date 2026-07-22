@@ -7,6 +7,8 @@ import 'seat_widget.dart'; // floor_select_page.dartから変更
 import 'login_page.dart';
 import 'notification_service.dart';
 import 'onboarding_page.dart';
+import 'app_localizations.dart';
+import 'notification_settings.dart';
 
 /// 画面遷移(他の画面から戻ってきたタイミングなど)を検知するための仕組み。
 /// キャンパス一覧のお気に入り並び替えなど、「画面に戻ってきた時だけ更新したい」
@@ -52,6 +54,14 @@ void main() async {
     debugPrint('通知サービスの初期化をスキップしました: $e');
   }
 
+  // 表示言語・通知ON/OFF設定の読み込み(いずれも端末内保存、失敗しても続行可能)
+  try {
+    await AppLanguage.instance.load();
+    await NotificationSettings.instance.load();
+  } catch (e) {
+    debugPrint('設定の読み込みをスキップしました: $e');
+  }
+
   runApp(const MyApp());
 }
 
@@ -60,15 +70,22 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'すわほ',
-      debugShowCheckedModeBanner: false,
-      navigatorObservers: [routeObserver],
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      home: const _RootGate(),
+    // AppLanguageが変化したら(設定画面で言語を切り替えたら)
+    // アプリ全体を再描画し、AppStrings.t(...)を使っている箇所に反映させる。
+    return ListenableBuilder(
+      listenable: AppLanguage.instance,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'すわほ',
+          debugShowCheckedModeBanner: false,
+          navigatorObservers: [routeObserver],
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+            useMaterial3: true,
+          ),
+          home: const _RootGate(),
+        );
+      },
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'firebase_db.dart';
 import 'notification_service.dart';
+import 'notification_settings.dart';
 
 /// QRコードを読み取って座席にチェックインする処理を扱うサービスクラス
 ///
@@ -9,11 +10,31 @@ import 'notification_service.dart';
 /// フロアはこの構造には含めない(現状は6Fのみ座席機能を持つため)。
 ///
 /// チェックインすると、以下2箇所を同時に更新する:
-///  - checkins/{seatId}       … その席に「誰が」座っているか(表示名つき)
+///  - checkins/{seatId}/{uid} … その席に「誰が」座っているか(1席に複数人OK)
 ///  - user_locations/{myUid}  … 自分が「今どの席にいるか」(フレンド画面用の逆引き)
+///
+/// 重要: 以前は checkins/{seatId} が1人分のオブジェクトだったため、
+/// 2人目がチェックインすると1人目の記録を上書きしてしまっていた。
+/// グループ席(定員2人以上)で複数人が同時にチェックインできるよう、
+/// checkins/{seatId} を「uidごとのマップ」に変更している。
+/// ESP32側は今まで通り checkins/{seatId} 全体をDELETEするだけでよい
+/// (センサーがグループ全体の離席を検知した際、そこにいた全員分を
+///  まとめてクリアする形になる)。
 class SeatCheckinService {
   final _db = appDatabase;
   final _auth = FirebaseAuth.instance;
+
+  /// 実際にESP32センサーで管理している座席(グループ席A)の定員。
+  /// ここに無い座席IDは、定員チェックを行わない(無制限)。
+  static const Map<String, int> _seatCapacities = {
+    'seat_01': 4,
+    'seat_02': 4,
+    'seat_03': 4,
+    'seat_04': 4,
+    'seat_05': 4,
+    'seat_06': 4,
+    'seat_07': 4,
+  };
 
   String get _myUid {
     final uid = _auth.currentUser?.uid;
@@ -42,36 +63,41 @@ class SeatCheckinService {
     return seatId;
   }
 
-  /// 指定した座席に、現在チェックインしている人がいれば取得する。
-  /// チェックイン前の確認画面(「今この席に誰がいるか」表示)に使う。
-  /// 誰もいなければ null を返す。
-  Future<SeatOccupant?> getCurrentOccupant(String seatId) async {
+  /// 指定した座席に、現在チェックインしている人たち全員を取得する。
+  /// チェックイン前の確認表示(「今この席に何人いるか」)に使う。
+  Future<List<SeatOccupant>> getCurrentOccupants(String seatId) async {
     final snapshot = await _db.ref('checkins/$seatId').get();
-    if (!snapshot.exists) return null;
+    if (!snapshot.exists) return [];
 
-    final data = Map<String, dynamic>.from(snapshot.value as Map);
-    return SeatOccupant(
-      uid: data['uid'] as String,
-      displayName: (data['displayName'] ?? '利用者') as String,
-    );
+    final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
+    return data.entries.map((entry) {
+      final value = Map<String, dynamic>.from(entry.value as Map);
+      return SeatOccupant(
+        uid: entry.key.toString(),
+        displayName: (value['displayName'] ?? '利用者') as String,
+      );
+    }).toList();
   }
 
-  /// 指定した座席に、自分(ログイン中のユーザー)をチェックインさせる
+  /// 指定した座席に、自分(ログイン中のユーザー)をチェックインさせる。
+  /// 定員が分かっている座席(グループ席A)で既に満席の場合はエラーを投げる。
   Future<void> checkIn({required String seatId}) async {
     final myUid = _myUid;
 
-    // すでに他の人がチェックイン中でないか確認
     final existing = await _db.ref('checkins/$seatId').get();
-    if (existing.exists) {
-      final existingUid = (existing.value as Map)['uid'];
-      if (existingUid != myUid) {
-        throw StateError('この座席にはすでに別の人がチェックインしています');
-      }
+    final currentOccupants = existing.exists
+        ? Map<dynamic, dynamic>.from(existing.value as Map)
+        : <dynamic, dynamic>{};
+
+    final capacity = _seatCapacities[seatId];
+    if (capacity != null &&
+        !currentOccupants.containsKey(myUid) &&
+        currentOccupants.length >= capacity) {
+      throw StateError('この座席は満席です(定員$capacity人)');
     }
 
     final updates = <String, dynamic>{
-      'checkins/$seatId': {
-        'uid': myUid,
+      'checkins/$seatId/$myUid': {
         'displayName': _myDisplayName,
         'checkedInAt': ServerValue.timestamp,
       },
@@ -84,11 +110,14 @@ class SeatCheckinService {
 
     // 3分放置(ESP32側の自動離席判定と同じ時間)で「まだ使いますか?」を通知する。
     // ローカル通知のため、アプリが完全に終了していると届かない場合がある。
-    NotificationService.instance.scheduleCheckinReminder(
-      id: _notificationIdFor(seatId),
-      seatId: seatId,
-      delay: const Duration(minutes: 3),
-    );
+    // 設定画面でOFFにされている場合はスキップする。
+    if (NotificationSettings.instance.checkinReminderEnabled) {
+      NotificationService.instance.scheduleCheckinReminder(
+        id: _notificationIdFor(seatId),
+        seatId: seatId,
+        delay: const Duration(minutes: 3),
+      );
+    }
   }
 
   /// seatIdから通知ID(int)を決定的に生成する。
@@ -98,18 +127,12 @@ class SeatCheckinService {
   /// 自分から自主的にチェックアウトする(QRを使わない、アプリ内ボタン用)
   /// ※通常は人感センサ側の離席検知で自動的に消えるが、
   ///   本人が明示的に「離席」を押せるようにする保険として用意
+  /// 他の人が同じ座席に残っていても、自分の分だけを消す。
   Future<void> checkOut({required String seatId}) async {
     final myUid = _myUid;
-    final existing = await _db.ref('checkins/$seatId').get();
-    if (existing.exists) {
-      final existingUid = (existing.value as Map)['uid'];
-      if (existingUid != myUid) {
-        throw StateError('自分がチェックインしていない座席は解除できません');
-      }
-    }
 
     final updates = <String, dynamic>{
-      'checkins/$seatId': null,
+      'checkins/$seatId/$myUid': null,
       'user_locations/$myUid': null,
     };
     await _db.ref().update(updates);

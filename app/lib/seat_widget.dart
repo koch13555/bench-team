@@ -16,6 +16,8 @@ import 'feedback_page.dart';
 import 'terms_page.dart';
 import 'auth_service.dart';
 import 'notification_service.dart';
+import 'app_localizations.dart';
+import 'notification_settings.dart';
 
 /// フレンド画面への遷移を試みる共通処理。
 /// ゲスト(匿名ログイン)の場合は「誰がどこに座っているか」を扱う
@@ -28,15 +30,12 @@ void goToFriendScreen(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('ゲストはご利用いただけません'),
-        content: const Text(
-          'フレンド機能(誰がどこに座っているかを把握する機能)は、'
-          'アカウントを作成した方のみ利用できます。',
-        ),
+        title: Text(AppStrings.t('guest_blocked_title')),
+        content: Text(AppStrings.t('guest_blocked_body')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
+            child: Text(AppStrings.t('close')),
           ),
         ],
       ),
@@ -71,16 +70,42 @@ class _HomePageState extends State<HomePage> {
   StreamSubscription<DatabaseEvent>? _myCheckinSub;
   String? _myWatchedSeatId;
 
+  // --- 座席の利用ログ(何分座っていたか)を記録するための監視 ---
+  StreamSubscription<DatabaseEvent>? _seatSessionsSub;
+  // seatId ごとに「今回の着席がいつ始まったか」を覚えておくためのキャッシュ。
+  // ESP32側は離席時に occupied:false と startTime:"" を同時に書き込むため、
+  // イベント受信時点では既に開始時刻が消えてしまっている。そのため、
+  // 着席中(startTimeがある)の間にこちらで覚えておく必要がある。
+  final Map<String, int> _seatSessionStart = {};
+
+  // --- キャンパス検索バー(元の検索欄の位置に表示する) ---
+  final _campusSearchController = TextEditingController();
+  String _campusSearchQuery = '';
+
   @override
   void initState() {
     super.initState();
     _watchFriendRequests();
     _watchFriendsList();
     _watchMyOwnCheckin();
+    _watchSeatSessions();
+    _campusSearchController.addListener(() {
+      setState(() => _campusSearchQuery = _campusSearchController.text.trim());
+    });
+    // ホーム画面はアプリ起動時からずっとスタックの一番下に残り続けるため、
+    // MaterialAppを包んでいるListenableBuilderの再描画だけでは
+    // この画面自身が再描画されないことがある。
+    // そのため、言語切替の通知をここでも直接受け取ってsetStateする。
+    AppLanguage.instance.addListener(_onLanguageChanged);
+  }
+
+  void _onLanguageChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    AppLanguage.instance.removeListener(_onLanguageChanged);
     _friendRequestsSub?.cancel();
     _friendsListSub?.cancel();
     for (final sub in _friendLocationSubs.values) {
@@ -88,6 +113,8 @@ class _HomePageState extends State<HomePage> {
     }
     _myLocationSub?.cancel();
     _myCheckinSub?.cancel();
+    _seatSessionsSub?.cancel();
+    _campusSearchController.dispose();
     super.dispose();
   }
 
@@ -105,7 +132,9 @@ class _HomePageState extends State<HomePage> {
       for (final fromUid in newOnes) {
         final entry = data is Map ? data[fromUid] : null;
         final fromName = entry is Map ? (entry['fromName']?.toString() ?? '不明なユーザー') : '不明なユーザー';
-        NotificationService.instance.showFriendRequestNotification(fromName);
+        if (NotificationSettings.instance.friendRequestEnabled) {
+          NotificationService.instance.showFriendRequestNotification(fromName);
+        }
       }
       _knownRequestUids = currentUids;
     });
@@ -152,7 +181,9 @@ class _HomePageState extends State<HomePage> {
 
       if (seatId != null && lastSeat == null) {
         final name = _friendNames[friendUid] ?? '友達';
-        NotificationService.instance.showFriendSeatedNotification(name, seatId);
+        if (NotificationSettings.instance.friendSeatedEnabled) {
+          NotificationService.instance.showFriendSeatedNotification(name, seatId);
+        }
       }
       _lastKnownFriendSeat[friendUid] = seatId;
     });
@@ -181,15 +212,59 @@ class _HomePageState extends State<HomePage> {
 
       _myCheckinSub = appDatabase.ref('checkins/$seatId').onValue.listen((checkinEvent) {
         final checkinData = checkinEvent.snapshot.value;
-        final checkinUid = checkinData is Map ? checkinData['uid'] as String? : null;
+        // checkins/{seatId} は uidごとのマップなので、自分のuidがキーとして
+        // 残っているかどうかで「まだこの席にいるか」を判定する。
+        final stillCheckedIn = checkinData is Map && checkinData.containsKey(uid);
 
-        // checkins側が消えた(または別人になった) = ESP32が離席を検知した
-        if (checkinUid != uid) {
+        // 自分の分が消えた(ESP32がグループ全体の離席を検知した) = 自動ログアウト
+        if (!stillCheckedIn) {
           appDatabase.ref('user_locations/$uid').remove();
           NotificationService.instance.cancel(seatId.hashCode & 0x7fffffff);
         }
       });
     });
+  }
+
+  /// seats/{seatId} 全体を監視し、着席→離席の1セッションが終わるたびに
+  /// seat_logs に「何分座っていたか」を1件記録する。
+  void _watchSeatSessions() {
+    _seatSessionsSub = appDatabase.ref('seats').onChildChanged.listen(_recordSeatSession);
+    // 起動時点で既に着席済みの座席があれば、開始時刻を覚えておく
+    appDatabase.ref('seats').onChildAdded.listen(_recordSeatSession);
+  }
+
+  void _recordSeatSession(DatabaseEvent event) {
+    final seatId = event.snapshot.key;
+    final data = event.snapshot.value;
+    if (seatId == null || data is! Map) return;
+
+    final occupied = data['occupied'] == true;
+    final startTimeRaw = data['startTime'];
+    final startTime = startTimeRaw is num ? startTimeRaw.toInt() : null;
+
+    if (occupied && startTime != null) {
+      // 着席中: 今回のセッション開始時刻を覚えておく
+      _seatSessionStart[seatId] = startTime;
+      return;
+    }
+
+    if (!occupied) {
+      // 離席: 覚えておいた開始時刻があれば、そこからの経過時間をログに残す
+      final sessionStart = _seatSessionStart.remove(seatId);
+      if (sessionStart == null) return;
+
+      final startedAtMs = sessionStart > 999999999999 ? sessionStart : sessionStart * 1000;
+      final endedAtMs = DateTime.now().millisecondsSinceEpoch;
+      final durationSeconds = ((endedAtMs - startedAtMs) / 1000).round();
+      if (durationSeconds <= 0) return;
+
+      appDatabase.ref('seat_logs').push().set({
+        'seatId': seatId,
+        'startedAt': startedAtMs,
+        'endedAt': endedAtMs,
+        'durationSeconds': durationSeconds,
+      });
+    }
   }
 
   @override
@@ -227,7 +302,7 @@ class _HomePageState extends State<HomePage> {
                             onTap: () async {
                               await FirebaseAuth.instance.signOut();
                             },
-                            child: const _HeaderChip(label: 'ログアウト'),
+                            child: _HeaderChip(label: AppStrings.t('drawer_logout')),
                           ),
                         ],
                       ),
@@ -246,7 +321,9 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            // 検索バー
+            const SizedBox(height: 20),
+
+            // 検索バー(キャンパスを名前で絞り込み)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Container(
@@ -260,9 +337,10 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
-                child: const TextField(
+                child: TextField(
+                  controller: _campusSearchController,
                   decoration: InputDecoration(
-                    hintText: '検索',
+                    hintText: AppStrings.t('search_campus_hint'),
                     prefixIcon: Icon(Icons.search, color: Colors.grey),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(vertical: 14),
@@ -280,11 +358,11 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(
+                    SizedBox(
                       width: double.infinity,
                       child: Text(
-                        'キャンパスを選択してください',
-                        style: TextStyle(
+                        AppStrings.t('select_campus_title'),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
@@ -307,7 +385,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(24),
-                          child: const _CampusListSection(),
+                          child: _CampusListSection(searchQuery: _campusSearchQuery),
                         ),
                       ),
                     ),
@@ -365,20 +443,20 @@ class _HomePageState extends State<HomePage> {
               // ホーム
               _NavItem(
                 icon: Icons.home,
-                label: 'ホーム',
+                label: AppStrings.t('nav_home'),
                 isActive: true,
               ),
               // フレンド
               _NavItem(
                 icon: Icons.people_outline,
-                label: 'フレンド',
+                label: AppStrings.t('nav_friend'),
                 isActive: false,
                 onTap: () => goToFriendScreen(context),
               ),
               // QRコード（同じサイズ・同じ色）
               _NavItem(
                 icon: Icons.qr_code_scanner,
-                label: 'QRコード',
+                label: AppStrings.t('nav_qr'),
                 isActive: false,
                 onTap: () {
                   Navigator.of(context).push(
@@ -441,16 +519,15 @@ final List<_CampusInfo> _allCampuses = [
 /// お気に入り(★)は Realtime Database の `users/{uid}/favoriteCampuses` に
 /// 保存し、お気に入りにした項目が一覧の上位に来るよう並び替える。
 class _CampusListSection extends StatefulWidget {
-  const _CampusListSection();
+  final String searchQuery;
+
+  const _CampusListSection({required this.searchQuery});
 
   @override
   State<_CampusListSection> createState() => _CampusListSectionState();
 }
 
 class _CampusListSectionState extends State<_CampusListSection> with RouteAware {
-  final _searchController = TextEditingController();
-  String _query = '';
-
   // お気に入りの並び順は、画面を開いた時点・他の画面から戻ってきた時点でのみ
   // 確定させる(お気に入りボタンを押した瞬間には並び替えない)。
   List<_CampusInfo>? _order;
@@ -458,9 +535,6 @@ class _CampusListSectionState extends State<_CampusListSection> with RouteAware 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(() {
-      setState(() => _query = _searchController.text.trim());
-    });
     _refreshOrder();
   }
 
@@ -476,7 +550,6 @@ class _CampusListSectionState extends State<_CampusListSection> with RouteAware 
   @override
   void dispose() {
     routeObserver.unsubscribe(this);
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -513,7 +586,7 @@ class _CampusListSectionState extends State<_CampusListSection> with RouteAware 
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final order = _order ?? _allCampuses;
-    final query = _query.toLowerCase();
+    final query = widget.searchQuery.toLowerCase();
     final visible = query.isEmpty
         ? order
         : order
@@ -522,46 +595,21 @@ class _CampusListSectionState extends State<_CampusListSection> with RouteAware 
                 c.subtitle.toLowerCase().contains(query))
             .toList();
 
-    return Column(
-      children: [
-        // 検索バー(名前・英語表記の部分一致で絞り込み)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'キャンパスを検索',
-                prefixIcon: Icon(Icons.search, color: Colors.grey),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: uid == null
-              ? _buildList(context, visible, const <String>{}, null)
-              : StreamBuilder<DatabaseEvent>(
-                  // 星の見た目(ON/OFF)はリアルタイムに反映するが、
-                  // 並び順(visible)はここでは変更しない。
-                  stream: appDatabase.ref('users/$uid/favoriteCampuses').onValue,
-                  builder: (context, snapshot) {
-                    final favData = snapshot.data?.snapshot.value;
-                    final favoriteIds = <String>{};
-                    if (favData is Map) {
-                      favoriteIds.addAll(favData.keys.map((k) => k.toString()));
-                    }
-                    return _buildList(context, visible, favoriteIds, uid);
-                  },
-                ),
-        ),
-      ],
-    );
+    return uid == null
+        ? _buildList(context, visible, const <String>{}, null)
+        : StreamBuilder<DatabaseEvent>(
+            // 星の見た目(ON/OFF)はリアルタイムに反映するが、
+            // 並び順(visible)はここでは変更しない。
+            stream: appDatabase.ref('users/$uid/favoriteCampuses').onValue,
+            builder: (context, snapshot) {
+              final favData = snapshot.data?.snapshot.value;
+              final favoriteIds = <String>{};
+              if (favData is Map) {
+                favoriteIds.addAll(favData.keys.map((k) => k.toString()));
+              }
+              return _buildList(context, visible, favoriteIds, uid);
+            },
+          );
   }
 
   Widget _buildList(
@@ -576,9 +624,9 @@ class _CampusListSectionState extends State<_CampusListSection> with RouteAware 
       child: Column(
         children: [
           if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Text('見つかりませんでした', style: TextStyle(color: Colors.grey)),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(AppStrings.t('no_campus_found'), style: const TextStyle(color: Colors.grey)),
             ),
           for (int i = 0; i < items.length; i++) ...[
             _CampusCard(
@@ -918,19 +966,19 @@ class FloorSelectPage extends StatelessWidget {
             children: [
               _NavItem(
                 icon: Icons.home_outlined,
-                label: 'ホーム',
+                label: AppStrings.t('nav_home'),
                 isActive: false,
                 onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
               ),
               _NavItem(
                 icon: Icons.people_outline,
-                label: 'フレンド',
+                label: AppStrings.t('nav_friend'),
                 isActive: false,
                 onTap: () => goToFriendScreen(context),
               ),
               _NavItem(
                 icon: Icons.qr_code_scanner,
-                label: 'QRコード',
+                label: AppStrings.t('nav_qr'),
                 isActive: false,
                 onTap: () {
                   Navigator.of(context).push(
@@ -1060,6 +1108,13 @@ class _FloorMapPageState extends State<FloorMapPage> {
 
     _listenToFirebase();
     _listenToMyLocation();
+    // HomePageと同じ理由(このページも設定画面などから戻ってくるまで
+    // スタックに残り続けるため)で、言語切替を直接受け取ってsetStateする。
+    AppLanguage.instance.addListener(_onLanguageChanged);
+  }
+
+  void _onLanguageChanged() {
+    if (mounted) setState(() {});
   }
   int _currentHour = 9;
 
@@ -1094,6 +1149,7 @@ class _FloorMapPageState extends State<FloorMapPage> {
 
   @override
   void dispose() {
+    AppLanguage.instance.removeListener(_onLanguageChanged);
     _myLocationSub?.cancel();
     super.dispose();
   }
@@ -1257,10 +1313,10 @@ class _FloorMapPageState extends State<FloorMapPage> {
                 },
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.home_outlined, size: 26, color: Colors.grey),
-                    SizedBox(height: 2),
-                    Text('ホーム', style: TextStyle(
+                  children: [
+                    const Icon(Icons.home_outlined, size: 26, color: Colors.grey),
+                    const SizedBox(height: 2),
+                    Text(AppStrings.t('nav_home'), style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                       color: Colors.grey,
@@ -1272,10 +1328,10 @@ class _FloorMapPageState extends State<FloorMapPage> {
                 onTap: () => goToFriendScreen(context),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.people_outline, size: 26, color: Colors.grey),
-                    SizedBox(height: 2),
-                    Text('フレンド', style: TextStyle(
+                  children: [
+                    const Icon(Icons.people_outline, size: 26, color: Colors.grey),
+                    const SizedBox(height: 2),
+                    Text(AppStrings.t('nav_friend'), style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                       color: Colors.grey,
@@ -1291,10 +1347,10 @@ class _FloorMapPageState extends State<FloorMapPage> {
                 },
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.qr_code_scanner, size: 26, color: Colors.grey),
-                    SizedBox(height: 2),
-                    Text('QRコード', style: TextStyle(
+                  children: [
+                    const Icon(Icons.qr_code_scanner, size: 26, color: Colors.grey),
+                    const SizedBox(height: 2),
+                    Text(AppStrings.t('nav_qr'), style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                       color: Colors.grey,
@@ -1332,7 +1388,7 @@ class _FloorMapPageState extends State<FloorMapPage> {
                       _isDisasterMode ? Icons.warning : Icons.warning_amber_outlined,
                       color: _isDisasterMode ? Colors.yellowAccent : Colors.white,
                     ),
-                    tooltip: '災害用モード切替',
+                    tooltip: AppStrings.t('disaster_toggle_tooltip'),
                     onPressed: _toggleDisasterMode,
                   ),
                 ],
@@ -1345,9 +1401,9 @@ class _FloorMapPageState extends State<FloorMapPage> {
                 color: Colors.orange,
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 alignment: Alignment.center,
-                child: const Text(
-                  '災害用モード：オレンジ色の座席がかまどベンチです',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                child: Text(
+                  AppStrings.t('disaster_banner'),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),
             // フロアマップ本体
@@ -1750,46 +1806,49 @@ class KamadoBenchInfo {
 
 // 防災かまどベンチ（コトブキ製）の取扱説明書に基づく標準の手順・注意事項。
 // 複数のかまどベンチで同じ内容を使い回すための共通定数。
-const List<String> _kamadoStandardUsageSteps = [
-  '安全のため、作業は必ず2人以上でおこなってください。専用レンチを準備します。',
-  '専用レンチでビスをゆるめ、上部のユニットベンチ（座面）を取り外します。',
-  'ユニットベンチの補助脚を引き出します。',
-  '内部の風防・炭置きパネルを確認し、風防はSフックでグリルに掛け、炭置きはグリルの下にセットします。',
-  '炭置きの上に炭をセットして着火し、グリルの上に鍋・やかんを置いて調理します（設置場所が砂・土でない場合はレンガ等を敷いてから加熱してください）。',
-];
+// 言語切替に対応させるため、constの固定リストではなくgetterにしている。
+List<String> get _kamadoStandardUsageSteps => [
+      AppStrings.t('kamado_usage_1'),
+      AppStrings.t('kamado_usage_2'),
+      AppStrings.t('kamado_usage_3'),
+      AppStrings.t('kamado_usage_4'),
+      AppStrings.t('kamado_usage_5'),
+    ];
 
-const List<String> _kamadoStandardStorageSteps = [
-  'グリルの上に風防・炭置きパネルを重ねて収納し、その上にSフックを置きます。',
-  'ユニットベンチ（座面）は補助脚を折りたたんでから、脚を本体にセットします（脚をグリルの隙間に通してください）。',
-  'ユニットベンチと本体を専用レンチ・ビスで固定して完成です。',
-];
+List<String> get _kamadoStandardStorageSteps => [
+      AppStrings.t('kamado_storage_1'),
+      AppStrings.t('kamado_storage_2'),
+      AppStrings.t('kamado_storage_3'),
+    ];
 
-const List<String> _kamadoStandardCautions = [
-  '加熱時は引火の恐れが無いように、製品の周りに十分なスペースを確保してください。',
-  '設置場所が砂・土でない場合は、レンガ等を敷いた上で加熱をおこなってください。',
-  '加熱後すぐに水をかけると製品が破損する恐れがあります。製品の温度が十分に下がってから清掃してください。',
-  '消火後も製品はしばらく高温です。温度が下がるまで近づいたり、手を触れたりしないでください。',
-];
+List<String> get _kamadoStandardCautions => [
+      AppStrings.t('kamado_caution_1'),
+      AppStrings.t('kamado_caution_2'),
+      AppStrings.t('kamado_caution_3'),
+      AppStrings.t('kamado_caution_4'),
+    ];
 
 // 暫定で、中央グリッドの数席をかまどベンチに指定しています。
 // 実際にどの座席をかまどベンチにするか決まったら、
 // このMapのキー（seatIndex）を変更してください。
-const Map<int, KamadoBenchInfo> kamadoBenchInfoBySeatIndex = {
-  7: KamadoBenchInfo(
-    title: 'かまどベンチ 1',
-    imageAssetPath: 'assets/kamado/kamado_1.png',
-    usageSteps: _kamadoStandardUsageSteps,
-    storageSteps: _kamadoStandardStorageSteps,
-    cautions: _kamadoStandardCautions,
-  ),
-  8: KamadoBenchInfo(
-    title: 'かまどベンチ 2',
-    imageAssetPath: 'assets/kamado/kamado_2.png',
-    usageSteps: _kamadoStandardUsageSteps,
-    storageSteps: _kamadoStandardStorageSteps,
-    cautions: _kamadoStandardCautions,
-  ),
-};
+// 言語切替に対応させるため、constの固定Mapではなくgetterにしている
+// (呼び出し側の kamadoBenchInfoBySeatIndex[x] という書き方は変更不要)。
+Map<int, KamadoBenchInfo> get kamadoBenchInfoBySeatIndex => {
+      7: KamadoBenchInfo(
+        title: AppStrings.t('kamado_1_title'),
+        imageAssetPath: 'assets/kamado/kamado_1.png',
+        usageSteps: _kamadoStandardUsageSteps,
+        storageSteps: _kamadoStandardStorageSteps,
+        cautions: _kamadoStandardCautions,
+      ),
+      8: KamadoBenchInfo(
+        title: AppStrings.t('kamado_2_title'),
+        imageAssetPath: 'assets/kamado/kamado_2.png',
+        usageSteps: _kamadoStandardUsageSteps,
+        storageSteps: _kamadoStandardStorageSteps,
+        cautions: _kamadoStandardCautions,
+      ),
+    };
 
 /// 「フロアマップ.png」(実際の図書館フロア図)を元にした座標データ。
 ///
@@ -1801,7 +1860,7 @@ const Map<int, KamadoBenchInfo> kamadoBenchInfoBySeatIndex = {
 ///
 /// 注記: 座標は画像を目視で概算した値のため、実機で確認しながら
 /// 微調整が必要な場合があります。スクリーンショットを送ってもらえれば調整します。
-const List<FloorMapItem> floor6FItems = [
+List<FloorMapItem> get floor6FItems => [
   // --- 左側の個人学習席（7個・ESP32センサー対応） seatIndex 0-6 ---
   FloorMapItem(x: 175, y: 275, width: 65, height: 65, type: FloorItemType.seat, seatIndex: 0),
   FloorMapItem(x: 175, y: 365, width: 65, height: 65, type: FloorItemType.seat, seatIndex: 1),
@@ -1869,19 +1928,19 @@ const List<FloorMapItem> floor6FItems = [
   FloorMapItem(x: 530, y: 985, width: 175, height: 28, type: FloorItemType.seat, seatIndex: 47),
 
   // --- ここから下はタップ不可の設備・ラベル ---
-  FloorMapItem(x: 355, y: 55, width: 110, height: 90, label: '階段', type: FloorItemType.label),
-  FloorMapItem(x: 345, y: 180, width: 300, height: 55, label: '受付カウンター', type: FloorItemType.facility),
-  FloorMapItem(x: 735, y: 230, width: 40, height: 90, label: '出入口', type: FloorItemType.label),
-  FloorMapItem(x: 805, y: 700, width: 110, height: 170, label: 'ソファコーナー', type: FloorItemType.facility),
-  FloorMapItem(x: 825, y: 955, width: 60, height: 230, label: '支援\nカウンター', type: FloorItemType.facility),
-  FloorMapItem(x: 30, y: 540, width: 90, height: 90, label: '検索端末', type: FloorItemType.facility),
-  FloorMapItem(x: 30, y: 690, width: 90, height: 90, label: '自動貸出\n返却機', type: FloorItemType.facility),
-  FloorMapItem(x: 170, y: 1010, width: 120, height: 130, label: '倉庫', type: FloorItemType.facility),
-  FloorMapItem(x: 310, y: 1035, width: 90, height: 90, label: '検索端末', type: FloorItemType.facility),
-  FloorMapItem(x: 440, y: 1195, width: 110, height: 210, label: 'メディア\nデーク', type: FloorItemType.facility),
-  FloorMapItem(x: 825, y: 1215, width: 90, height: 90, label: '検索端末', type: FloorItemType.facility),
-  FloorMapItem(x: 725, y: 1275, width: 90, height: 90, label: '自動貸出\n返却機', type: FloorItemType.facility),
-  FloorMapItem(x: 650, y: 1430, width: 100, height: 90, label: '出入口', type: FloorItemType.label),
+  FloorMapItem(x: 355, y: 55, width: 110, height: 90, label: AppStrings.t('facility_stairs'), type: FloorItemType.label),
+  FloorMapItem(x: 345, y: 180, width: 300, height: 55, label: AppStrings.t('facility_reception'), type: FloorItemType.facility),
+  FloorMapItem(x: 735, y: 230, width: 40, height: 90, label: AppStrings.t('facility_entrance'), type: FloorItemType.label),
+  FloorMapItem(x: 805, y: 700, width: 110, height: 170, label: AppStrings.t('facility_sofa_corner'), type: FloorItemType.facility),
+  FloorMapItem(x: 825, y: 955, width: 60, height: 230, label: AppStrings.t('facility_support_counter'), type: FloorItemType.facility),
+  FloorMapItem(x: 30, y: 540, width: 90, height: 90, label: AppStrings.t('facility_search_terminal'), type: FloorItemType.facility),
+  FloorMapItem(x: 30, y: 690, width: 90, height: 90, label: AppStrings.t('facility_lending_machine'), type: FloorItemType.facility),
+  FloorMapItem(x: 170, y: 1010, width: 120, height: 130, label: AppStrings.t('facility_storage'), type: FloorItemType.facility),
+  FloorMapItem(x: 310, y: 1035, width: 90, height: 90, label: AppStrings.t('facility_search_terminal'), type: FloorItemType.facility),
+  FloorMapItem(x: 440, y: 1195, width: 110, height: 210, label: AppStrings.t('facility_media_desk'), type: FloorItemType.facility),
+  FloorMapItem(x: 825, y: 1215, width: 90, height: 90, label: AppStrings.t('facility_search_terminal'), type: FloorItemType.facility),
+  FloorMapItem(x: 725, y: 1275, width: 90, height: 90, label: AppStrings.t('facility_lending_machine'), type: FloorItemType.facility),
+  FloorMapItem(x: 650, y: 1430, width: 100, height: 90, label: AppStrings.t('facility_entrance'), type: FloorItemType.label),
 ];
 
 /// 9Fimage.png から実測した座標データ
@@ -1889,7 +1948,7 @@ const List<FloorMapItem> floor6FItems = [
 ///
 /// 9F は座席の着席/退席機能を持たない（要件により見た目のみ）ため、
 /// 全アイテムを facility / label として扱い、タップ不可にしている。
-const List<FloorMapItem> floor9FItems = [
+List<FloorMapItem> get floor9FItems => [
   // --- 左列（7個） ---
   FloorMapItem(x: 159, y: 121, width: 59, height: 39),
   FloorMapItem(x: 159, y: 191, width: 59, height: 39),
@@ -1936,7 +1995,7 @@ const List<FloorMapItem> floor9FItems = [
   FloorMapItem(x: 628, y: 525, width: 20, height: 20),
 
   // --- 入口ラベル ---
-  FloorMapItem(x: 567, y: 635, width: 91, height: 42, label: '入口', type: FloorItemType.label),
+  FloorMapItem(x: 567, y: 635, width: 91, height: 42, label: AppStrings.t('facility_entrance_small'), type: FloorItemType.label),
 ];
 
 /// 座標リスト（FloorMapItem）を実際のキャンバス上に配置して描画するウィジェット。
@@ -2180,13 +2239,13 @@ class KamadoBenchDetailSheet extends StatelessWidget {
                 ),
               const SizedBox(height: 20),
               _KamadoSection(
-                heading: 'A. かまどを使用する',
+                heading: AppStrings.t('kamado_usage_heading'),
                 steps: info.usageSteps,
                 headingColor: Colors.orange.shade800,
               ),
               const SizedBox(height: 20),
               _KamadoSection(
-                heading: 'B. ユニットベンチを収納する（使用後）',
+                heading: AppStrings.t('kamado_storage_heading'),
                 steps: info.storageSteps,
                 headingColor: Colors.blueGrey.shade700,
               ),
@@ -2206,7 +2265,7 @@ class KamadoBenchDetailSheet extends StatelessWidget {
                         Icon(Icons.warning_amber, color: Colors.red.shade700, size: 20),
                         const SizedBox(width: 6),
                         Text(
-                          '使用上の注意',
+                          AppStrings.t('kamado_caution_heading'),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: Colors.red.shade700,
@@ -2330,7 +2389,7 @@ class SeatDetailSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              isMeeting ? '共有スペース' : '個別ワークスペース',
+              isMeeting ? AppStrings.t('seat_shared_space') : AppStrings.t('seat_individual_space'),
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
@@ -2354,17 +2413,17 @@ class SeatDetailSheet extends StatelessWidget {
               child: Column(
                 children: [
                   _buildSpecRow(
-                    '利用状態',
-                    seat.isOccupied ? '使用中 🔴' : '空席 🟢',
+                    AppStrings.t('seat_status_label'),
+                    seat.isOccupied ? AppStrings.t('seat_status_occupied') : AppStrings.t('seat_status_vacant'),
                   ),
                   const Divider(),
-                  _buildSpecRow('座れる人数', '${seat.capacity}人'),
+                  _buildSpecRow(AppStrings.t('seat_capacity_label'), '${seat.capacity}${AppStrings.t('seat_capacity_unit')}'),
                   const Divider(),
-                  _buildSpecRow('電源 (コンセント)', seat.hasPower ? 'あり 🔌' : 'なし ✕'),
+                  _buildSpecRow(AppStrings.t('seat_power_label'), seat.hasPower ? AppStrings.t('seat_power_yes') : AppStrings.t('seat_power_no')),
                   const Divider(),
                   _buildSpecRow(
-                    '主なアメニティ',
-                    seat.amenities.isEmpty ? '特になし' : seat.amenities.join(', '),
+                    AppStrings.t('seat_amenities_label'),
+                    seat.amenities.isEmpty ? AppStrings.t('seat_amenities_none') : seat.amenities.join(', '),
                   ),
                 ],
               ),
@@ -2488,15 +2547,15 @@ class _DrawerMenuList extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('ログアウトしますか?'),
+        title: Text(AppStrings.t('logout_confirm_title')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('キャンセル'),
+            child: Text(AppStrings.t('cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('ログアウト'),
+            child: Text(AppStrings.t('drawer_logout')),
           ),
         ],
       ),
@@ -2513,10 +2572,10 @@ class _DrawerMenuList extends StatelessWidget {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        _DrawerItem(label: 'フロア選択', onTap: onFloorSelectTap),
+        _DrawerItem(label: AppStrings.t('drawer_floor_select'), onTap: onFloorSelectTap),
         const Divider(height: 1, color: AppColors.mainGreen),
         _DrawerItem(
-          label: '使い方',
+          label: AppStrings.t('drawer_how_to_use'),
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const HowToUsePage()),
@@ -2525,7 +2584,7 @@ class _DrawerMenuList extends StatelessWidget {
         ),
         const Divider(height: 1, color: AppColors.mainGreen),
         _DrawerItem(
-          label: 'プロフィール',
+          label: AppStrings.t('drawer_profile'),
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const ProfilePage()),
@@ -2534,7 +2593,7 @@ class _DrawerMenuList extends StatelessWidget {
         ),
         const Divider(height: 1, color: AppColors.mainGreen),
         _DrawerItem(
-          label: 'アプリについて',
+          label: AppStrings.t('drawer_about'),
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const AboutPage()),
@@ -2543,7 +2602,7 @@ class _DrawerMenuList extends StatelessWidget {
         ),
         const Divider(height: 1, color: AppColors.mainGreen),
         _DrawerItem(
-          label: 'フィードバック',
+          label: AppStrings.t('drawer_feedback'),
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const FeedbackPage()),
@@ -2552,7 +2611,7 @@ class _DrawerMenuList extends StatelessWidget {
         ),
         const Divider(height: 1, color: AppColors.mainGreen),
         _DrawerItem(
-          label: '利用規約・プライバシーポリシー',
+          label: AppStrings.t('drawer_terms'),
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const TermsPage()),
@@ -2561,7 +2620,7 @@ class _DrawerMenuList extends StatelessWidget {
         ),
         const Divider(height: 1, color: AppColors.mainGreen),
         _DrawerItem(
-          label: 'ログアウト',
+          label: AppStrings.t('drawer_logout'),
           onTap: () => _confirmLogout(context),
         ),
       ],
